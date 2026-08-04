@@ -293,6 +293,8 @@ gltfLoader.load('./data/anatomy.glb', async (gltf) => {
   modelReady = true;
   setStatus('');
   applyMuscleColors();
+  /* honour a facing requested while the model was still downloading */
+  if (pendingFace !== null) { const b = pendingFace; pendingFace = null; faceSide(b); }
 }, (evt) => {
   if (evt.total) setStatus(`Loading anatomical model… ${Math.round((evt.loaded / evt.total) * 100)}%`);
 }, () => {
@@ -389,8 +391,10 @@ function pauseAutoRotate() { controls.autoRotate = false; autoRotateBox.checked 
 /* one Flip button instead of Front/Back: the camera already turns itself
    when a selection lands, so this only needs to toggle the other side */
 let facingBack = false;
+let pendingFace = null;   /* a restored URL can ask to turn before the model exists */
 function faceSide(back) {
   facingBack = back;
+  if (!modelReady) { pendingFace = back; return; }
   pauseAutoRotate();
   tweenAzimuth(back ? Math.PI : 0);
 }
