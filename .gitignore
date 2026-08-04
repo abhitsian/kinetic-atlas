@@ -1,0 +1,4 @@
+# build scratch: candidate models evaluated before picking anatomy.glb
+assets-candidates/
+.impeccable/
+.DS_Store

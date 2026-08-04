@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kinetic Atlas — every exercise, mapped to the body</title>
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Kinetic Atlas<span class="spark">✦</span></h1>
+      <span class="tagline">every exercise, mapped to the body</span>
+    </div>
+    <nav class="topnav" aria-label="Views">
+      <button class="navpill active" data-cat="">All</button>
+      <button class="navpill" data-cat="strength">Strength</button>
+      <button class="navpill" data-cat="stretching">Stretching</button>
+      <button class="navpill" data-cat="plyometrics">Plyo</button>
+      <button class="navpill" data-cat="cardio">Cardio</button>
+    </nav>
+    <div class="searchwrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" type="search" placeholder="Search exercises, muscles…" autocomplete="off">
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- LEFT: library -->
+    <aside class="panel library">
+      <div class="panel-head">
+        <span class="overline">Exercise library</span>
+        <span class="count" id="resultCount">873</span>
+      </div>
+      <div class="equiprow" id="equipRow" aria-label="Equipment"></div>
+      <div class="filters">
+        <select id="fMuscle" aria-label="Muscle">
+          <option value="">Any muscle</option>
+        </select>
+        <select id="fEquipment" aria-label="More equipment">
+          <option value="">Any equipment</option>
+        </select>
+        <select id="fLevel" aria-label="Level">
+          <option value="">Any level</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="expert">Expert</option>
+        </select>
+        <select id="fSort" aria-label="Sort">
+          <option value="recommended">Recommended</option>
+          <option value="az">A–Z</option>
+          <option value="level">Easiest first</option>
+        </select>
+      </div>
+      <div class="rolerow" id="roleRow" hidden>
+        <span class="rolelabel" id="roleLabel">Trains</span>
+        <div class="seg" role="group" aria-label="Muscle role">
+          <button class="segbtn active" data-role="primary">As primary</button>
+          <button class="segbtn" data-role="any">Incl. assisting</button>
+        </div>
+      </div>
+      <div class="exlist" id="exList" role="listbox" aria-label="Exercises"></div>
+      <div class="list-foot" id="listFoot"></div>
+    </aside>
+
+    <!-- CENTER: 3D body -->
+    <section class="stage">
+      <div id="viewport"></div>
+      <div class="tipnote" id="tipNote">
+        <span class="tip-title">✦ Tip</span>
+        Drag to rotate<br>Scroll to zoom<br>Click a muscle to<br>filter exercises
+      </div>
+      <div class="legend" id="legend">
+        <span class="lg"><i class="dot dot-primary"></i>Primary</span>
+        <span class="lg"><i class="dot dot-secondary"></i>Secondary</span>
+      </div>
+      <div class="legend legend-cov" id="legendCoverage" hidden>
+        <span class="lg">Exercises per muscle</span>
+        <span class="ramp"><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="lg ramp-ends"><span>few</span><span id="covMax">many</span></span>
+      </div>
+      <div class="stage-tools">
+        <button class="tool" id="viewFlip">Flip</button>
+        <button class="tool" id="viewReset">Reset</button>
+        <button class="tool" id="viewCoverage">Coverage</button>
+      </div>
+      <button class="clearchip" id="clearChip" hidden>
+        <span id="clearChipText">Showing all</span>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="stage-caption">
+        <span class="overline">3D muscle map · click a muscle to explore</span>
+        <span id="stageLabel">Full body</span>
+      </div>
+      <p class="credit">Anatomy: BodyParts3D © The Database Center for Life Science (CC BY-SA 2.1 JP) · Z-Anatomy by Gauthier Kervyn (CC BY-SA 4.0) · Head scan by Lee Perry-Smith, Infinite-Realities (CC BY 3.0) · Exercises: free-exercise-db (public domain)</p>
+      <div class="stage-status" id="stageStatus" hidden></div>
+      <label class="rotpill" for="autoRotate">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        Auto rotate
+        <span class="switch"><input type="checkbox" id="autoRotate" checked><i></i></span>
+      </label>
+      <div class="hoverlabel" id="hoverLabel"></div>
+    </section>
+
+    <!-- RIGHT: detail -->
+    <aside class="panel detail" id="detailPanel">
+      <div class="detail-empty" id="detailEmpty">
+        <div class="empty-fig">🫀</div>
+        <p class="empty-title">Pick an exercise</p>
+        <p class="empty-sub">Choose from the library, or click a muscle on the body to see every exercise that trains it.</p>
+      </div>
+      <div class="detail-body" id="detailBody" hidden>
+        <span class="overline accent" id="dOverline">The movement</span>
+        <h2 id="dTitle">—</h2>
+        <p class="epithet" id="dEpithet">—</p>
+        <div class="badges" id="dBadges"></div>
+
+        <figure class="mover" id="mover">
+          <img id="frameA" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Start position">
+          <img id="frameB" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="End position">
+          <figcaption><span id="frameTag">Start</span><span class="mover-note">start ⇄ end</span></figcaption>
+          <div class="mover-fallback" id="moverFallback" hidden>Images unavailable. Check your connection.</div>
+        </figure>
+
+        <dl class="atglance" id="dGlance"></dl>
+
+        <div class="sect">
+          <span class="overline">Muscles worked</span>
+          <div class="muscle-tags" id="dMuscles"></div>
+        </div>
+
+        <div class="callout" id="dImpact">
+          <span class="callout-title">Anatomical impact</span>
+          <p id="dImpactText"></p>
+        </div>
+
+        <details class="steps-wrap" id="dStepsWrap">
+          <summary><span class="overline">How to perform</span><span class="stepcount" id="dStepCount"></span></summary>
+          <ol class="steps" id="dSteps"></ol>
+        </details>
+      </div>
+    </aside>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

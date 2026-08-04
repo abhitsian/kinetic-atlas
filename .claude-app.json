@@ -1,0 +1,6 @@
+{
+  "name": "Kinetic Atlas",
+  "type": "static",
+  "entry": "index.html",
+  "description": "873 exercises mapped onto a real 3D anatomical model — how to perform each one and what it hits anatomically"
+}
