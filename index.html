@@ -70,6 +70,13 @@
         <div class="pf"><span>Prioritise muscles <em>(or click the body)</em></span>
           <div class="picker" id="pfMuscles"></div>
         </div>
+        <div class="pf"><span>Work around a sore joint</span>
+          <div class="picker" id="pfInjury"></div>
+        </div>
+        <label class="pf pf-row">
+          <input type="checkbox" id="pfMobility">
+          <span>Add a mobility finisher to each session</span>
+        </label>
       </div>
       <div class="planfoot">
         <button class="primarybtn" id="pfGo">Generate week</button>
@@ -159,8 +166,13 @@
         <span class="overline accent" id="weekSplit">—</span>
         <h2 id="weekTitle">Your week</h2>
         <p class="weeknote" id="weekNote"></p>
+        <div class="seg weektabs" id="weekTabs"></div>
+        <p class="weekspec" id="weekSpec"></p>
       </div>
       <div id="weekBody"></div>
+      <div class="week-actions">
+        <button class="ghostbtn" id="weekCopy">Copy the week as text</button>
+      </div>
       <p class="disclaimer">Sets, reps and rest are standard training guidance applied on top of the
         library. The exercise data itself carries no prescription: it has no sets, reps or rest fields.
         Nothing here accounts for injury history or medical constraints.</p>

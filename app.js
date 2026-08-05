@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { DRACOLoader } from './vendor/DRACOLoader.js';
-import { buildPlan, balance, round, alternativesFor, swapExercise, relativeTo } from './plan.js';
+import { buildPlan, balance, round, alternativesFor, swapExercise, relativeTo,
+         applyWeek, retally, BLOCK, fmtMins, fmtRest } from './plan.js';
 
 /* ============================================================
    Kinetic Atlas — 873 exercises mapped onto a real anatomical model
@@ -933,10 +934,20 @@ function impactText(e) {
    ============================================================ */
 const PLAN_EQUIP = ['body only', 'dumbbell', 'barbell', 'cable', 'machine', 'kettlebells',
                     'bands', 'e-z curl bar', 'exercise ball', 'medicine ball'];
+const INJURIES = ['knee', 'shoulder', 'lower back'];
+
 let planMode = false;
 let planPriority = new Set();
 let planEquip = new Set();
-let lastPlan = null;
+let planInjury = new Set();
+let planDays = 4, planMinutes = 60, planVariety = 0, weekIndex = 0;
+let basePlan = null;   /* the block's week 1 */
+let lastPlan = null;   /* week currently displayed */
+
+const LOG_KEY = 'kinetic-atlas-log';
+const loadLog = () => { try { return JSON.parse(localStorage.getItem(LOG_KEY)) || {}; } catch { return {}; } };
+const saveLog = (l) => { try { localStorage.setItem(LOG_KEY, JSON.stringify(l)); } catch {} };
+let trainingLog = loadLog();
 
 function segNum(host, values, initial, onPick) {
   host.innerHTML = '';
@@ -953,25 +964,28 @@ function segNum(host, values, initial, onPick) {
   }
 }
 
-let planDays = 4, planMinutes = 60;
+function pickerRow(host, names, set, onToggle) {
+  for (const name of names) {
+    const b = document.createElement('button');
+    b.className = 'pick';
+    b.dataset.v = name;
+    b.textContent = cap(name);
+    b.addEventListener('click', () => {
+      set.has(name) ? set.delete(name) : set.add(name);
+      b.classList.toggle('on');
+      if (onToggle) onToggle(name);
+    });
+    host.appendChild(b);
+  }
+}
 
 function initPlanner() {
   segNum($('pfDays'), [2, 3, 4, 5, 6], 4, v => { planDays = v; });
   segNum($('pfMinutes'), [30, 45, 60, 75], 60, v => { planMinutes = v; });
 
-  const eq = $('pfEquip');
   const present = new Set(ALL.map(e => e.equipment && e.equipment !== 'None' ? e.equipment : 'body only'));
-  for (const name of PLAN_EQUIP) {
-    if (!present.has(name)) continue;
-    const b = document.createElement('button');
-    b.className = 'pick';
-    b.textContent = cap(name);
-    b.addEventListener('click', () => {
-      planEquip.has(name) ? planEquip.delete(name) : planEquip.add(name);
-      b.classList.toggle('on');
-    });
-    eq.appendChild(b);
-  }
+  pickerRow($('pfEquip'), PLAN_EQUIP.filter(e => present.has(e)), planEquip);
+  pickerRow($('pfInjury'), INJURIES, planInjury);
 
   const mu = $('pfMuscles');
   for (const m of MUSCLES) {
@@ -985,6 +999,7 @@ function initPlanner() {
 
   $('pfGo').addEventListener('click', () => generateWeek(0));
   $('pfShuffle').addEventListener('click', () => generateWeek(planVariety + 1));
+  $('weekCopy').addEventListener('click', copyWeek);
 }
 
 function togglePriority(m) {
@@ -996,70 +1011,109 @@ function togglePriority(m) {
     ? `Priority: ${[...planPriority].join(', ')}` : 'Full body';
 }
 
-let planVariety = 0;
-
 function generateWeek(variety = 0) {
   planVariety = variety;
-  lastPlan = buildPlan(ALL, {
+  weekIndex = 0;
+  basePlan = buildPlan(ALL, {
     days: planDays, minutes: planMinutes,
     level: $('pfLevel').value, goal: $('pfGoal').value,
     equipment: [...planEquip], priority: [...planPriority],
     difficulty: $('pfDifficulty').value,
+    injuries: [...planInjury],
+    includeMobility: $('pfMobility').checked,
     variety,
   });
+  showWeek(0);
+  $('pfShuffle').hidden = false;
+}
+
+function showWeek(i) {
+  weekIndex = i;
+  lastPlan = applyWeek(basePlan, i);
+  retally(lastPlan);
   renderWeek(lastPlan);
   paintVolume(lastPlan);
-  $('pfShuffle').hidden = false;
 }
 
 function renderWeek(plan) {
   $('weekSplit').textContent = plan.split;
-  /* direct sets only — summing every muscle would double-count assisting work */
   const direct = plan.sessions.reduce((s, d) => s + d.items.reduce((n, i) => n + i.sets, 0), 0);
   const bal = balance(plan.volume);
+  const totalMins = Math.round(plan.duration.reduce((a, b) => a + b, 0) / 60);
   $('weekNote').textContent =
-    `${plan.sessions.length} sessions · ${direct} direct working sets · push ${bal.push} vs pull ${bal.pull} · posterior ${bal.posterior} vs anterior ${bal.anterior}`;
+    `${plan.sessions.length} sessions · ${direct} direct sets · ~${totalMins} min total · push ${bal.push} vs pull ${bal.pull} · posterior ${bal.posterior} vs anterior ${bal.anterior}`;
+
+  /* four-week block */
+  $('weekTabs').innerHTML = BLOCK.map((b, i) =>
+    `<button class="segbtn${i === weekIndex ? ' active' : ''}" data-w="${i}">Wk ${b.week}${b.deload ? ' ·﻿ deload' : ''}</button>`).join('');
+  $('weekTabs').querySelectorAll('.segbtn').forEach(b =>
+    b.addEventListener('click', () => showWeek(+b.dataset.w)));
+  $('weekSpec').textContent = plan.weekSpec ? plan.weekSpec.rirNote : '';
 
   const warn = plan.warnings.length
     ? `<div class="warnbox"><span class="callout-title">Where this week falls short</span>${
-        plan.warnings.map(w => `<p>${w}</p>`).join('')}</div>` : '';
+        plan.warnings.map(w => `<p>${w.text}</p>`).join('')}</div>` : '';
+
+  const patterns = `<div class="patbox">
+      <span class="overline">Movement patterns covered</span>
+      <div class="patrow">${plan.patterns.map(p =>
+        `<span class="pat${p.present ? ' on' : ''}">${p.label}</span>`).join('')}</div>
+    </div>`;
 
   const days = plan.sessions.map((s, di) => `
     <div class="daycard">
-      <div class="dayhead"><span class="dayname">${s.name}</span><span class="daymeta">${s.items.length} exercises</span></div>
-      ${s.items.map((it, ii) => `
+      <div class="dayhead">
+        <span class="dayname">${plan.schedule[di] || ''} · ${s.name}</span>
+        <span class="daymeta">${s.items.length} exercises · ~${fmtMins(plan.duration[di])}</span>
+      </div>
+      ${s.items.map((it, ii) => {
+        const prev = trainingLog[logKey(it)];
+        return `
         <div class="planrow${it.priority ? ' prio' : ''}">
           <div class="pr-main">
             <button class="pr-name" data-ex="${it.exercise.id}">${it.exercise.name}</button>
-            <span class="pr-sub">${it.muscle} · ${it.exercise.mechanic || 'compound'}</span>
+            <span class="pr-sub">${it.muscle} · ${it.exercise.mechanic || 'compound'}${
+              it.warmups ? ` · ${it.warmups} warm-up${it.warmups > 1 ? 's' : ''}` : ''}</span>
+            <span class="pr-log">
+              <input class="loadin" type="text" inputmode="decimal" placeholder="load"
+                     data-k="${logKey(it)}" value="${prev ? prev.load : ''}">
+              ${prev ? `<span class="prevload">last ${prev.load}</span>` : ''}
+            </span>
           </div>
-          <div class="pr-rx"><b>${it.sets}×${it.reps}</b><span>${it.rest}</span></div>
-          <button class="swapbtn" data-d="${di}" data-i="${ii}" title="Swap for another ${it.muscle} exercise" aria-label="Swap exercise">
+          <div class="pr-rx">
+            <b>${it.sets}×${it.reps}</b>
+            <span>${fmtRest(it.restSec)} · ${it.rir}</span>
+          </div>
+          <button class="swapbtn" data-d="${di}" data-i="${ii}" aria-label="Swap exercise">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h13l-3-3M20 17H7l3 3"/></svg>
           </button>
-        </div>`).join('')}
+        </div>`; }).join('')}
+      ${s.finisher ? `<div class="planrow finisher">
+          <div class="pr-main"><span class="pr-name-static">${s.finisher.exercise.name}</span>
+          <span class="pr-sub">mobility finisher</span></div>
+          <div class="pr-rx"><b>${s.finisher.sets}×${s.finisher.reps}</b></div>
+        </div>` : ''}
     </div>`).join('');
 
-  /* weekly volume table — the thing most apps never show */
-  const rows = MUSCLES
-    .map(m => [m, plan.volume[m] || 0])
-    .filter(([, v]) => v > 0)
+  const rows = MUSCLES.map(m => [m, plan.volume[m] || 0]).filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...rows.map(r => r[1]));
   const volTable = `
     <div class="volblock">
-      <span class="overline">Weekly sets per muscle</span>
+      <span class="overline">Weekly sets and frequency</span>
       ${rows.map(([m, v]) => `
         <div class="volrow${planPriority.has(m) ? ' prio' : ''}">
           <span class="vm">${m}</span>
           <span class="vbar"><i style="width:${(v / max) * 100}%"></i></span>
           <span class="vn">${round(v)}</span>
+          <span class="vf">${plan.actualFreq[m] || 0}×</span>
         </div>`).join('')}
       <p class="volnote">Secondary involvement counts as half a set. Around 10–20 sets a week drives
-        growth for a trained muscle; roughly 4–6 maintains.</p>
+        growth for a trained muscle; roughly 4–6 maintains. Two or more sessions per muscle beats one.</p>
     </div>`;
 
-  $('weekBody').innerHTML = warn + days + volTable;
+  $('weekBody').innerHTML = warn + patterns + days + volTable;
+
   $('weekBody').querySelectorAll('.pr-name').forEach(b =>
     b.addEventListener('click', () => {
       const ex = ALL.find(e => e.id === b.dataset.ex);
@@ -1067,11 +1121,37 @@ function renderWeek(plan) {
     }));
   $('weekBody').querySelectorAll('.swapbtn').forEach(b =>
     b.addEventListener('click', () => openSwap(b, +b.dataset.d, +b.dataset.i)));
+  $('weekBody').querySelectorAll('.loadin').forEach(inp =>
+    inp.addEventListener('change', () => {
+      const v = inp.value.trim();
+      if (v) trainingLog[inp.dataset.k] = { load: v, at: new Date().toISOString().slice(0, 10) };
+      else delete trainingLog[inp.dataset.k];
+      saveLog(trainingLog);
+    }));
 }
 
-/* Paint the week against each muscle's own goal rather than against the
-   biggest number in the week. "Am I short here?" is the useful question;
-   a plain magnitude ramp just turns the whole body one colour. */
+const logKey = (it) => `${it.exercise.id}`;
+
+function copyWeek(){
+  if (!lastPlan) return;
+  const lines = [`${lastPlan.split} — ${lastPlan.weekSpec ? lastPlan.weekSpec.label : 'Week 1'}`, ''];
+  lastPlan.sessions.forEach((s, i) => {
+    lines.push(`${lastPlan.schedule[i] || ''} — ${s.name} (~${fmtMins(lastPlan.duration[i])})`);
+    for (const it of s.items) {
+      lines.push(`  ${it.exercise.name} — ${it.sets}×${it.reps} @ ${it.rir}, rest ${fmtRest(it.restSec)}${it.warmups ? `, ${it.warmups} warm-up sets` : ''}`);
+    }
+    if (s.finisher) lines.push(`  ${s.finisher.exercise.name} — ${s.finisher.sets}×${s.finisher.reps}`);
+    lines.push('');
+  });
+  lines.push('Sets, reps, rest and RIR are standard training guidance, not from the exercise dataset.');
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const b = $('weekCopy'); const t = b.textContent;
+    b.textContent = 'Copied'; setTimeout(() => { b.textContent = t; }, 1400);
+  });
+}
+
+/* Paint the week against each muscle's own goal rather than the biggest
+   number in the week: "am I short here?" is the useful question. */
 const C_UNDER = new THREE.Color('#8a3b32');
 const C_OVER  = new THREE.Color('#efa733');
 
@@ -1107,6 +1187,7 @@ function setPlanMode(on) {
   $('libraryPanel').hidden = on;
   $('weekPanel').hidden = !on;
   $('detailPanel').hidden = on;
+  $('planBack').hidden = true;
   $('modeBtn').textContent = on ? 'Browse library' : 'Plan a week';
   $('modeBtn').classList.toggle('on', on);
   if (!on) {
@@ -1118,11 +1199,51 @@ function setPlanMode(on) {
     setHighlight([...planPriority], []);
   }
 }
-
 $('modeBtn').addEventListener('click', () => setPlanMode(!planMode));
 
-/* Inspecting an exercise from the plan must not strand you in browse mode:
-   stay in the planner, swap the right panel, and offer the way back. */
+/* ---------- swapping ---------- */
+function openSwap(btn, dayIndex, itemIndex) {
+  const row = btn.closest('.planrow');
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains('swapbox')) { existing.remove(); return; }
+  document.querySelectorAll('.swapbox').forEach(el => el.remove());
+
+  const item = lastPlan.sessions[dayIndex].items[itemIndex];
+  const box = document.createElement('div');
+  box.className = 'swapbox';
+  row.insertAdjacentElement('afterend', box);
+
+  let relative = 'all';
+  const draw = () => {
+    const alts = alternativesFor(lastPlan, item.muscle, item.exercise, { relative });
+    const tabs = ['all', 'easier', 'same', 'harder'].map(r =>
+      `<button class="swaptab${r === relative ? ' on' : ''}" data-r="${r}">${
+        r === 'all' ? 'All' : r === 'same' ? 'Same level' : cap(r)}</button>`).join('');
+    box.innerHTML = `
+      <span class="swaphead">Swap ${item.muscle} exercise · currently ${item.exercise.level}</span>
+      <div class="swaptabs">${tabs}</div>` + (alts.length
+        ? alts.map((e, i) => {
+            const rel = relativeTo(e, item.exercise);
+            return `<button class="swapopt" data-i="${i}">
+              <span class="so-name">${e.name}<span class="so-rel ${rel}">${rel === 'same' ? e.level : rel}</span></span>
+              <span class="so-meta">${e.equipment && e.equipment !== 'None' ? e.equipment : 'body only'} · ${e.mechanic || 'n/a'} · ${e.level}</span>
+            </button>`;
+          }).join('')
+        : `<p class="swapnone">Nothing ${relative === 'all' ? '' : relative + ' '}available for ${item.muscle} with the equipment and difficulty selected.</p>`);
+
+    box.querySelectorAll('.swaptab').forEach(t =>
+      t.addEventListener('click', () => { relative = t.dataset.r; draw(); }));
+    box.querySelectorAll('.swapopt').forEach(b =>
+      b.addEventListener('click', () => {
+        /* mutate the block's base week so the change survives week switching */
+        swapExercise(basePlan, dayIndex, itemIndex, alts[+b.dataset.i]);
+        showWeek(weekIndex);
+      }));
+  };
+  draw();
+}
+
+/* Inspecting an exercise from the plan must not strand you in browse mode. */
 function showPlanExercise(ex) {
   $('weekPanel').hidden = true;
   $('detailPanel').hidden = false;
@@ -1143,46 +1264,3 @@ $('planBack').addEventListener('click', backToWeek);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && planMode && !$('planBack').hidden) backToWeek();
 });
-
-/* ---------- swapping an exercise inside a generated week ---------- */
-function openSwap(btn, dayIndex, itemIndex) {
-  const row = btn.closest('.planrow');
-  const existing = row.nextElementSibling;
-  if (existing && existing.classList.contains('swapbox')) { existing.remove(); return; }
-  document.querySelectorAll('.swapbox').forEach(el => el.remove());
-
-  const item = lastPlan.sessions[dayIndex].items[itemIndex];
-  const box = document.createElement('div');
-  box.className = 'swapbox';
-  row.insertAdjacentElement('afterend', box);
-
-  let relative = 'all';
-  const draw = () => {
-    const alts = alternativesFor(lastPlan, item.muscle, item.exercise, { relative });
-    const tabs = ['all', 'easier', 'same', 'harder'].map(r =>
-      `<button class="swaptab${r === relative ? ' on' : ''}" data-r="${r}">${
-        r === 'all' ? 'All' : r === 'same' ? 'Same level' : cap(r)}</button>`).join('');
-
-    box.innerHTML = `
-      <span class="swaphead">Swap ${item.muscle} exercise · currently ${item.exercise.level}</span>
-      <div class="swaptabs">${tabs}</div>` + (alts.length
-        ? alts.map((e, i) => {
-            const rel = relativeTo(e, item.exercise);
-            return `<button class="swapopt" data-i="${i}">
-              <span class="so-name">${e.name}<span class="so-rel ${rel}">${rel === 'same' ? e.level : rel}</span></span>
-              <span class="so-meta">${e.equipment && e.equipment !== 'None' ? e.equipment : 'body only'} · ${e.mechanic || 'n/a'} · ${e.level}</span>
-            </button>`;
-          }).join('')
-        : `<p class="swapnone">Nothing ${relative === 'all' ? '' : relative + ' '}available for ${item.muscle} with the equipment and difficulty selected.</p>`);
-
-    box.querySelectorAll('.swaptab').forEach(t =>
-      t.addEventListener('click', () => { relative = t.dataset.r; draw(); }));
-    box.querySelectorAll('.swapopt').forEach(b =>
-      b.addEventListener('click', () => {
-        swapExercise(lastPlan, dayIndex, itemIndex, alts[+b.dataset.i]);
-        renderWeek(lastPlan);
-        paintVolume(lastPlan);
-      }));
-  };
-  draw();
-}

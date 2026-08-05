@@ -502,3 +502,32 @@ body {
 .so-rel.easier { color: var(--green); background: rgba(134,192,106,0.15); }
 .so-rel.harder { color: #e2664a; background: rgba(226,102,74,0.15); }
 .so-rel.same { color: var(--ink-3); background: rgba(255,255,255,0.06); }
+
+/* ---------- planner additions ---------- */
+.pf-row { flex-direction: row; align-items: center; gap: 8px; }
+.pf-row input { accent-color: var(--accent); width: 15px; height: 15px; }
+.pf-row > span { text-transform: none; letter-spacing: 0.01em; font-family: var(--sans); font-size: 11.5px; color: var(--ink-2); }
+.weektabs { margin-top: 11px; }
+.weektabs .segbtn { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.04em; }
+.weekspec { font-size: 11.5px; line-height: 1.5; color: var(--ink-2); margin-top: 8px; }
+.week-actions { padding: 0 18px 18px; }
+.patbox { background: var(--panel-2); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px; box-shadow: inset 0 0 0 1px var(--line); }
+.patrow { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.pat {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 4px 7px; border-radius: 5px; color: var(--ink-3);
+  background: rgba(255,255,255,0.05); text-decoration: line-through;
+}
+.pat.on { color: var(--accent); background: var(--accent-soft); text-decoration: none; }
+.pr-log { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
+.loadin {
+  width: 66px; font: inherit; font-family: var(--mono); font-size: 10px;
+  background: var(--panel-3); color: var(--ink); border: 0; border-radius: 5px; padding: 4px 6px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.loadin::placeholder { color: var(--ink-3); }
+.loadin:focus { outline: 0; box-shadow: inset 0 0 0 1.5px var(--accent); }
+.prevload { font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+.vf { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); width: 20px; text-align: right; }
+.planrow.finisher { opacity: 0.75; }
+.pr-name-static { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
