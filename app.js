@@ -1328,7 +1328,7 @@ function drawRun() {
 
   const totalSets = items.reduce((n, i) => n + i.sets, 0);
   const doneSets = items.reduce((n, i) => n + doneArr(i).filter(Boolean).length, 0);
-  $('runProgressBar').style.width = `${(doneSets / totalSets) * 100}%`;
+  $('runProgressBar').style.transform = `scaleX(${totalSets ? doneSets / totalSets : 0})`;
 
   $('runName').textContent = ex.name;
   $('runMeta').innerHTML = [
@@ -1413,7 +1413,7 @@ function startRest(secs) {
 }
 function tickRest() {
   $('restClock').textContent = `${Math.floor(restLeft / 60)}:${String(restLeft % 60).padStart(2, '0')}`;
-  $('restBar').style.width = `${Math.max(0, (restLeft / restTotal) * 100)}%`;
+  $('restBar').style.transform = `scaleX(${Math.max(0, restLeft / restTotal)})`;
   if (restLeft <= 0) {
     stopRest();
     if (navigator.vibrate) navigator.vibrate([120, 60, 120]);

@@ -564,7 +564,10 @@ body {
 .run-title { display: flex; flex-direction: column; gap: 3px; }
 .run-count { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; }
 .run-progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: rgba(255,255,255,0.07); }
-.run-progress i { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
+.run-progress i {
+  display: block; height: 100%; width: 100%; background: var(--accent);
+  transform: scaleX(0); transform-origin: left; transition: transform 0.3s;
+}
 
 .run-body { flex: 1; display: flex; min-height: 0; }
 .run-main { flex: 1; overflow-y: auto; padding: 22px 24px 120px; max-width: 720px; margin: 0 auto; width: 100%; }
@@ -634,7 +637,10 @@ body {
 .rest-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
 .rest-clock { font-family: var(--mono); font-size: 40px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .rest-bar { height: 4px; background: rgba(255,255,255,0.09); border-radius: 99px; overflow: hidden; }
-.rest-bar i { display: block; height: 100%; background: var(--accent); transition: width 1s linear; }
+.rest-bar i {
+  display: block; height: 100%; width: 100%; background: var(--accent);
+  transform: scaleX(1); transform-origin: left; transition: transform 1s linear;
+}
 .rest-actions { display: flex; gap: 8px; }
 .rest-actions button {
   flex: 1; border: 0; cursor: pointer; font: inherit; font-family: var(--mono);
