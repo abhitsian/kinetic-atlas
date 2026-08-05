@@ -222,6 +222,61 @@
     </aside>
   </main>
 
+  <!-- WORKOUT RUNNER: the in-gym interface -->
+  <div class="run" id="runOverlay" hidden>
+    <header class="run-top">
+      <button class="run-close" id="runClose" aria-label="Leave workout">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="run-title">
+        <span class="overline accent" id="runDay">Session</span>
+        <span class="run-count" id="runCount"></span>
+      </div>
+      <button class="run-listbtn" id="runListBtn">All exercises</button>
+      <div class="run-progress"><i id="runProgressBar"></i></div>
+    </header>
+
+    <div class="run-body">
+      <section class="run-main" id="runMain">
+        <h2 id="runName">—</h2>
+        <div class="run-meta" id="runMeta"></div>
+
+        <figure class="run-fig">
+          <img id="runImgA" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Start position">
+          <img id="runImgB" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="End position">
+          <figcaption id="runFrameTag">Start</figcaption>
+        </figure>
+
+        <div class="run-sets" id="runSets"></div>
+
+        <details class="run-steps" id="runSteps">
+          <summary><span class="overline">How to perform</span></summary>
+          <ol class="steps" id="runStepList"></ol>
+        </details>
+      </section>
+
+      <aside class="run-side" id="runSide" hidden>
+        <span class="overline">Session</span>
+        <div id="runSideList"></div>
+      </aside>
+    </div>
+
+    <div class="run-rest" id="runRest" hidden>
+      <span class="rest-label">Rest</span>
+      <span class="rest-clock" id="restClock">0:00</span>
+      <div class="rest-bar"><i id="restBar"></i></div>
+      <div class="rest-actions">
+        <button id="restPlus">+30s</button>
+        <button id="restSkip" class="rest-skip">Skip rest</button>
+      </div>
+    </div>
+
+    <footer class="run-nav">
+      <button id="runPrev">Previous</button>
+      <button id="runNext" class="run-next">Next exercise</button>
+    </footer>
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>

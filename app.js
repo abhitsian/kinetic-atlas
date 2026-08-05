@@ -1065,6 +1065,7 @@ function renderWeek(plan) {
       <div class="dayhead">
         <span class="dayname">${plan.schedule[di] || ''} · ${s.name}</span>
         <span class="daymeta">${s.items.length} exercises · ~${fmtMins(plan.duration[di])}</span>
+        <button class="startbtn" data-day="${di}">Start</button>
       </div>
       ${s.items.map((it, ii) => {
         const prev = trainingLog[logKey(it)];
@@ -1121,6 +1122,11 @@ function renderWeek(plan) {
     }));
   $('weekBody').querySelectorAll('.swapbtn').forEach(b =>
     b.addEventListener('click', () => openSwap(b, +b.dataset.d, +b.dataset.i)));
+  $('weekBody').querySelectorAll('.startbtn').forEach(b =>
+    b.addEventListener('click', () => {
+      const saved = restoreRun();
+      startRun(+b.dataset.day, saved && saved.dayIndex === +b.dataset.day ? saved : null);
+    }));
   $('weekBody').querySelectorAll('.loadin').forEach(inp =>
     inp.addEventListener('change', () => {
       const v = inp.value.trim();
@@ -1263,4 +1269,180 @@ function backToWeek() {
 $('planBack').addEventListener('click', backToWeek);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && planMode && !$('planBack').hidden) backToWeek();
+});
+
+/* ============================================================
+   Workout runner — the interface used while training.
+   Big targets, one exercise at a time, a rest clock that starts
+   itself, and progress that survives a mid-session reload.
+   ============================================================ */
+const RUN_KEY = 'kinetic-atlas-session';
+let run = null;        /* { dayIndex, index, done: {exId: [bool,...]}, date } */
+let restTimer = null, restLeft = 0, restTotal = 0;
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const saveRun = () => { try { localStorage.setItem(RUN_KEY, JSON.stringify(run)); } catch {} };
+function restoreRun() {
+  try {
+    const r = JSON.parse(localStorage.getItem(RUN_KEY));
+    if (r && r.date === todayStr()) return r;
+  } catch {}
+  return null;
+}
+
+function startRun(dayIndex, resume) {
+  const session = lastPlan.sessions[dayIndex];
+  if (!session || !session.items.length) return;
+  run = resume || { dayIndex, index: 0, done: {}, date: todayStr() };
+  run.dayIndex = dayIndex;
+  saveRun();
+  $('runOverlay').hidden = false;
+  document.body.classList.add('running');
+  drawRun();
+}
+
+function endRun() {
+  stopRest();
+  $('runOverlay').hidden = true;
+  document.body.classList.remove('running');
+  if (lastPlan) renderWeek(lastPlan);
+}
+
+const runItems = () => lastPlan.sessions[run.dayIndex].items;
+const runItem = () => runItems()[run.index];
+const doneArr = (it) => {
+  const k = it.exercise.id;
+  if (!run.done[k] || run.done[k].length !== it.sets) {
+    run.done[k] = Array.from({ length: it.sets }, (_, i) => (run.done[k] || [])[i] || false);
+  }
+  return run.done[k];
+};
+
+function drawRun() {
+  const items = runItems();
+  const it = runItem();
+  const ex = it.exercise;
+
+  $('runDay').textContent = `${lastPlan.schedule[run.dayIndex] || ''} · ${lastPlan.sessions[run.dayIndex].name}`;
+  $('runCount').textContent = `Exercise ${run.index + 1} of ${items.length}`;
+
+  const totalSets = items.reduce((n, i) => n + i.sets, 0);
+  const doneSets = items.reduce((n, i) => n + doneArr(i).filter(Boolean).length, 0);
+  $('runProgressBar').style.width = `${(doneSets / totalSets) * 100}%`;
+
+  $('runName').textContent = ex.name;
+  $('runMeta').innerHTML = [
+    `<span class="rm accent">${it.sets} × ${it.reps}</span>`,
+    `<span class="rm">${it.rir}</span>`,
+    `<span class="rm">rest ${fmtRest(it.restSec)}</span>`,
+    `<span class="rm">${it.muscle}</span>`,
+    it.warmups ? `<span class="rm">${it.warmups} warm-up set${it.warmups > 1 ? 's' : ''} first</span>` : '',
+  ].filter(Boolean).join('');
+
+  const a = $('runImgA'), b = $('runImgB');
+  a.src = IMG_BASE + ex.images[0];
+  b.src = IMG_BASE + (ex.images[1] || ex.images[0]);
+  b.style.opacity = 0;
+  $('runFrameTag').textContent = 'Start';
+  clearInterval(drawRun._fade);
+  let atEnd = false;
+  drawRun._fade = setInterval(() => {
+    atEnd = !atEnd;
+    b.style.opacity = atEnd ? 1 : 0;
+    $('runFrameTag').textContent = atEnd ? 'End' : 'Start';
+  }, 1600);
+
+  /* one row per set, tapping it logs the set and starts the rest clock */
+  const done = doneArr(it);
+  const prev = trainingLog[it.exercise.id];
+  $('runSets').innerHTML = done.map((d, i) => `
+    <button class="setrow${d ? ' done' : ''}" data-s="${i}">
+      <span class="setno">Set ${i + 1}</span>
+      <span class="setrx">${it.reps} reps · ${it.rir}</span>
+      <span class="settick">${d ? '✓' : ''}</span>
+    </button>`).join('') + `
+    <label class="setload">Working load
+      <input id="runLoad" type="text" inputmode="decimal" placeholder="${prev ? prev.load : 'e.g. 60kg'}" value="${prev ? prev.load : ''}">
+    </label>`;
+
+  $('runSets').querySelectorAll('.setrow').forEach(btn =>
+    btn.addEventListener('click', () => toggleSet(+btn.dataset.s)));
+  $('runLoad').addEventListener('change', (e) => {
+    const v = e.target.value.trim();
+    if (v) trainingLog[it.exercise.id] = { load: v, at: todayStr() };
+    else delete trainingLog[it.exercise.id];
+    saveLog(trainingLog);
+  });
+
+  const steps = (ex.instructions || []).filter(s => s && s.trim());
+  $('runStepList').innerHTML = steps.length
+    ? steps.map(s => `<li>${s}</li>`).join('')
+    : '<li>No written steps. Follow the start and end frames above.</li>';
+
+  $('runSideList').innerHTML = items.map((x, i) => {
+    const d = doneArr(x).filter(Boolean).length;
+    return `<button class="sideitem${i === run.index ? ' on' : ''}${d === x.sets ? ' complete' : ''}" data-i="${i}">
+      <span class="si-name">${x.exercise.name}</span>
+      <span class="si-meta">${d}/${x.sets} sets · ${x.muscle}</span>
+    </button>`;
+  }).join('');
+  $('runSideList').querySelectorAll('.sideitem').forEach(b =>
+    b.addEventListener('click', () => { run.index = +b.dataset.i; saveRun(); drawRun(); }));
+
+  $('runPrev').disabled = run.index === 0;
+  $('runNext').textContent = run.index === items.length - 1 ? 'Finish session' : 'Next exercise';
+  setHighlight([it.muscle], it.exercise.secondaryMuscles || []);
+}
+
+function toggleSet(i) {
+  const it = runItem();
+  const done = doneArr(it);
+  done[i] = !done[i];
+  saveRun();
+  if (done[i]) startRest(it.restSec);
+  drawRun();
+}
+
+/* ---------- rest clock ---------- */
+function startRest(secs) {
+  stopRest();
+  restTotal = secs; restLeft = secs;
+  $('runRest').hidden = false;
+  tickRest();
+  restTimer = setInterval(tickRest, 1000);
+}
+function tickRest() {
+  $('restClock').textContent = `${Math.floor(restLeft / 60)}:${String(restLeft % 60).padStart(2, '0')}`;
+  $('restBar').style.width = `${Math.max(0, (restLeft / restTotal) * 100)}%`;
+  if (restLeft <= 0) {
+    stopRest();
+    if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+    return;
+  }
+  restLeft--;
+}
+function stopRest() {
+  clearInterval(restTimer); restTimer = null;
+  $('runRest').hidden = true;
+}
+
+$('runClose').addEventListener('click', endRun);
+$('runPrev').addEventListener('click', () => { if (run.index > 0) { run.index--; saveRun(); drawRun(); } });
+$('runNext').addEventListener('click', () => {
+  const items = runItems();
+  if (run.index < items.length - 1) { run.index++; saveRun(); drawRun(); }
+  else endRun();
+});
+$('runListBtn').addEventListener('click', () => {
+  const s = $('runSide');
+  s.hidden = !s.hidden;
+  $('runListBtn').classList.toggle('on', !s.hidden);
+});
+$('restSkip').addEventListener('click', stopRest);
+$('restPlus').addEventListener('click', () => { restLeft += 30; restTotal += 30; tickRest(); });
+document.addEventListener('keydown', (e) => {
+  if ($('runOverlay').hidden) return;
+  if (e.key === 'Escape') endRun();
+  if (e.key === 'ArrowRight') $('runNext').click();
+  if (e.key === 'ArrowLeft') $('runPrev').click();
 });
