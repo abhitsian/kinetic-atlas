@@ -96,17 +96,43 @@ function scoreExercise(e, muscle, opts) {
   return s;
 }
 
+export const LEVEL_RANK = { beginner: 0, intermediate: 1, expert: 2 };
+
 /* Every exercise a muscle could be trained with, given the same equipment
-   constraint the plan was built under, best first. */
-export function alternativesFor(plan, muscle, excludeId, limit = 10) {
+   constraint the plan was built under. `relative` compares each candidate's
+   difficulty against the exercise being replaced, so "give me something
+   easier" is one click rather than a scan of the list. */
+export function alternativesFor(plan, muscle, current, { relative = 'all', limit = 12 } = {}) {
   const { usable, opts } = plan.ctx;
   const taken = new Set();
   for (const s of plan.sessions) for (const i of s.items) taken.add(i.exercise.id);
-  taken.delete(excludeId);
+  taken.delete(current.id);
+  const cur = LEVEL_RANK[current.level] ?? 1;
+
   return usable
-    .filter(e => e.primaryMuscles.includes(muscle) && !taken.has(e.id) && e.id !== excludeId)
-    .sort((a, b) => scoreExercise(b, muscle, opts) - scoreExercise(a, muscle, opts))
+    .filter(e => {
+      if (!e.primaryMuscles.includes(muscle)) return false;
+      if (taken.has(e.id) || e.id === current.id) return false;
+      const r = LEVEL_RANK[e.level] ?? 1;
+      if (relative === 'easier') return r < cur;
+      if (relative === 'harder') return r > cur;
+      if (relative === 'same') return r === cur;
+      return true;
+    })
+    .sort((a, b) => {
+      /* when asking for easier, put the easiest first; harder, the hardest */
+      const ra = LEVEL_RANK[a.level] ?? 1, rb = LEVEL_RANK[b.level] ?? 1;
+      if (relative === 'easier' && ra !== rb) return ra - rb;
+      if (relative === 'harder' && ra !== rb) return rb - ra;
+      return scoreExercise(b, muscle, opts) - scoreExercise(a, muscle, opts);
+    })
     .slice(0, limit);
+}
+
+/* how a candidate compares to what it would replace */
+export function relativeTo(candidate, current) {
+  const a = LEVEL_RANK[candidate.level] ?? 1, b = LEVEL_RANK[current.level] ?? 1;
+  return a < b ? 'easier' : a > b ? 'harder' : 'same';
 }
 
 /* Swapping changes the prescription when the replacement is a different
@@ -167,7 +193,7 @@ function warningsFor(volume, prio, target, usable, hasEquip) {
 export function buildPlan(all, opts) {
   const {
     days = 4, equipment = [], priority = [], level = 'intermediate',
-    goal = 'hypertrophy', minutes = 60, variety = 0,
+    goal = 'hypertrophy', minutes = 60, variety = 0, difficulty = 'any',
   } = opts;
 
   const split = SPLITS[Math.min(6, Math.max(2, days))];
@@ -179,6 +205,9 @@ export function buildPlan(all, opts) {
 
   const usable = all.filter(e => {
     if (e.category === 'stretching' || e.category === 'cardio') return false;
+    /* a difficulty ceiling, not an exact match: capping at intermediate
+       should still allow the beginner movements underneath it */
+    if (difficulty !== 'any' && (LEVEL_RANK[e.level] ?? 1) > LEVEL_RANK[difficulty]) return false;
     if (!eqSet.size) return true;
     const eq = e.equipment && e.equipment !== 'None' ? e.equipment : 'body only';
     return eqSet.has(eq);

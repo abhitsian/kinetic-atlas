@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { DRACOLoader } from './vendor/DRACOLoader.js';
-import { buildPlan, balance, round, alternativesFor, swapExercise } from './plan.js';
+import { buildPlan, balance, round, alternativesFor, swapExercise, relativeTo } from './plan.js';
 
 /* ============================================================
    Kinetic Atlas — 873 exercises mapped onto a real anatomical model
@@ -1004,6 +1004,7 @@ function generateWeek(variety = 0) {
     days: planDays, minutes: planMinutes,
     level: $('pfLevel').value, goal: $('pfGoal').value,
     equipment: [...planEquip], priority: [...planPriority],
+    difficulty: $('pfDifficulty').value,
     variety,
   });
   renderWeek(lastPlan);
@@ -1151,26 +1152,37 @@ function openSwap(btn, dayIndex, itemIndex) {
   document.querySelectorAll('.swapbox').forEach(el => el.remove());
 
   const item = lastPlan.sessions[dayIndex].items[itemIndex];
-  const alts = alternativesFor(lastPlan, item.muscle, item.exercise.id);
-
   const box = document.createElement('div');
   box.className = 'swapbox';
-  if (!alts.length) {
-    box.innerHTML = `<p class="swapnone">No other ${item.muscle} exercise is available with the equipment selected.</p>`;
-  } else {
-    box.innerHTML = `<span class="swaphead">Swap ${item.muscle} exercise</span>` +
-      alts.map((e, i) => `
-        <button class="swapopt" data-i="${i}">
-          <span class="so-name">${e.name}</span>
-          <span class="so-meta">${e.equipment && e.equipment !== 'None' ? e.equipment : 'body only'} · ${e.mechanic || '—'} · ${e.level}</span>
-        </button>`).join('');
-  }
   row.insertAdjacentElement('afterend', box);
 
-  box.querySelectorAll('.swapopt').forEach(b =>
-    b.addEventListener('click', () => {
-      swapExercise(lastPlan, dayIndex, itemIndex, alts[+b.dataset.i]);
-      renderWeek(lastPlan);
-      paintVolume(lastPlan);
-    }));
+  let relative = 'all';
+  const draw = () => {
+    const alts = alternativesFor(lastPlan, item.muscle, item.exercise, { relative });
+    const tabs = ['all', 'easier', 'same', 'harder'].map(r =>
+      `<button class="swaptab${r === relative ? ' on' : ''}" data-r="${r}">${
+        r === 'all' ? 'All' : r === 'same' ? 'Same level' : cap(r)}</button>`).join('');
+
+    box.innerHTML = `
+      <span class="swaphead">Swap ${item.muscle} exercise · currently ${item.exercise.level}</span>
+      <div class="swaptabs">${tabs}</div>` + (alts.length
+        ? alts.map((e, i) => {
+            const rel = relativeTo(e, item.exercise);
+            return `<button class="swapopt" data-i="${i}">
+              <span class="so-name">${e.name}<span class="so-rel ${rel}">${rel === 'same' ? e.level : rel}</span></span>
+              <span class="so-meta">${e.equipment && e.equipment !== 'None' ? e.equipment : 'body only'} · ${e.mechanic || 'n/a'} · ${e.level}</span>
+            </button>`;
+          }).join('')
+        : `<p class="swapnone">Nothing ${relative === 'all' ? '' : relative + ' '}available for ${item.muscle} with the equipment and difficulty selected.</p>`);
+
+    box.querySelectorAll('.swaptab').forEach(t =>
+      t.addEventListener('click', () => { relative = t.dataset.r; draw(); }));
+    box.querySelectorAll('.swapopt').forEach(b =>
+      b.addEventListener('click', () => {
+        swapExercise(lastPlan, dayIndex, itemIndex, alts[+b.dataset.i]);
+        renderWeek(lastPlan);
+        paintVolume(lastPlan);
+      }));
+  };
+  draw();
 }
