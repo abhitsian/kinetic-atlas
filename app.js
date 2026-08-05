@@ -1053,7 +1053,7 @@ function renderWeek(plan) {
   $('weekBody').querySelectorAll('.pr-name').forEach(b =>
     b.addEventListener('click', () => {
       const ex = ALL.find(e => e.id === b.dataset.ex);
-      if (ex) { setPlanMode(false); selectExercise(ex); }
+      if (ex) showPlanExercise(ex);
     }));
 }
 
@@ -1108,3 +1108,26 @@ function setPlanMode(on) {
 }
 
 $('modeBtn').addEventListener('click', () => setPlanMode(!planMode));
+
+/* Inspecting an exercise from the plan must not strand you in browse mode:
+   stay in the planner, swap the right panel, and offer the way back. */
+function showPlanExercise(ex) {
+  $('weekPanel').hidden = true;
+  $('detailPanel').hidden = false;
+  $('planBack').hidden = false;
+  selectExercise(ex);
+  $('detailPanel').scrollTop = 0;
+}
+
+function backToWeek() {
+  $('planBack').hidden = true;
+  $('detailPanel').hidden = true;
+  hideDetail();
+  $('weekPanel').hidden = false;
+  if (lastPlan) { renderWeek(lastPlan); paintVolume(lastPlan); }
+}
+
+$('planBack').addEventListener('click', backToWeek);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && planMode && !$('planBack').hidden) backToWeek();
+});

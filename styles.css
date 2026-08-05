@@ -441,3 +441,13 @@ body {
 .vn { font-family: var(--mono); font-size: 10px; color: var(--ink-2); width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
 .volnote { font-size: 11px; line-height: 1.55; color: var(--ink-3); margin-top: 11px; }
 .disclaimer { padding: 4px 18px 20px; font-size: 10.5px; line-height: 1.6; color: var(--ink-3); }
+
+.backbar {
+  position: sticky; top: 0; z-index: 3; width: 100%;
+  display: flex; align-items: center; gap: 7px;
+  border: 0; font: inherit; font-family: var(--mono); cursor: pointer;
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;
+  color: var(--accent); background: var(--panel);
+  padding: 12px 18px; border-bottom: 1px solid var(--line);
+}
+.backbar:hover { background: var(--panel-2); }
