@@ -22,6 +22,7 @@
       <button class="navpill" data-cat="plyometrics">Plyo</button>
       <button class="navpill" data-cat="cardio">Cardio</button>
     </nav>
+    <button class="modebtn" id="modeBtn">Plan a week</button>
     <div class="searchwrap">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="search" type="search" placeholder="Search exercises, muscles…" autocomplete="off">
@@ -29,8 +30,46 @@
   </header>
 
   <main class="layout">
+    <!-- LEFT: planner -->
+    <aside class="panel planner" id="plannerPanel" hidden>
+      <div class="panel-head">
+        <span class="overline accent">Plan a training week</span>
+      </div>
+      <div class="planform">
+        <label class="pf"><span>Days per week</span>
+          <div class="seg seg-num" id="pfDays"></div>
+        </label>
+        <label class="pf"><span>Session length</span>
+          <div class="seg seg-num" id="pfMinutes"></div>
+        </label>
+        <label class="pf"><span>Experience</span>
+          <select id="pfLevel">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate" selected>Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </select>
+        </label>
+        <label class="pf"><span>Goal</span>
+          <select id="pfGoal">
+            <option value="hypertrophy" selected>Muscle growth</option>
+            <option value="strength">Strength</option>
+            <option value="endurance">Endurance</option>
+          </select>
+        </label>
+        <div class="pf"><span>Equipment you have</span>
+          <div class="picker" id="pfEquip"></div>
+        </div>
+        <div class="pf"><span>Prioritise muscles <em>— or click the body</em></span>
+          <div class="picker" id="pfMuscles"></div>
+        </div>
+      </div>
+      <div class="planfoot">
+        <button class="primarybtn" id="pfGo">Generate week</button>
+      </div>
+    </aside>
+
     <!-- LEFT: library -->
-    <aside class="panel library">
+    <aside class="panel library" id="libraryPanel">
       <div class="panel-head">
         <span class="overline">Exercise library</span>
         <span class="count" id="resultCount">873</span>
@@ -104,6 +143,19 @@
       </label>
       <div class="hoverlabel" id="hoverLabel"></div>
     </section>
+
+    <!-- RIGHT: generated week -->
+    <aside class="panel detail" id="weekPanel" hidden>
+      <div class="week-head">
+        <span class="overline accent" id="weekSplit">—</span>
+        <h2 id="weekTitle">Your week</h2>
+        <p class="weeknote" id="weekNote"></p>
+      </div>
+      <div id="weekBody"></div>
+      <p class="disclaimer">Sets, reps and rest are standard training guidance applied on top of the
+        library. The exercise data itself carries no prescription — it has no sets, reps or rest fields.
+        Nothing here accounts for injury history or medical constraints.</p>
+    </aside>
 
     <!-- RIGHT: detail -->
     <aside class="panel detail" id="detailPanel">

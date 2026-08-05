@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { DRACOLoader } from './vendor/DRACOLoader.js';
+import { buildPlan, balance, round } from './plan.js';
 
 /* ============================================================
    Kinetic Atlas — 873 exercises mapped onto a real anatomical model
@@ -546,6 +547,7 @@ loadExercises()
     for (const e of data) for (const m of e.primaryMuscles) if (m in muscleCounts) muscleCounts[m]++;
 
     buildEquipChips(data);
+    initPlanner();
     const wantEx = readUrl();
     applyFiltersToControls();
     refreshList();
@@ -925,3 +927,184 @@ function impactText(e) {
   }
   return parts.join(' ');
 }
+
+/* ============================================================
+   Planner mode
+   ============================================================ */
+const PLAN_EQUIP = ['body only', 'dumbbell', 'barbell', 'cable', 'machine', 'kettlebells',
+                    'bands', 'e-z curl bar', 'exercise ball', 'medicine ball'];
+let planMode = false;
+let planPriority = new Set();
+let planEquip = new Set();
+let lastPlan = null;
+
+function segNum(host, values, initial, onPick) {
+  host.innerHTML = '';
+  for (const v of values) {
+    const b = document.createElement('button');
+    b.className = 'segbtn' + (v === initial ? ' active' : '');
+    b.textContent = v;
+    b.addEventListener('click', () => {
+      [...host.children].forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      onPick(v);
+    });
+    host.appendChild(b);
+  }
+}
+
+let planDays = 4, planMinutes = 60;
+
+function initPlanner() {
+  segNum($('pfDays'), [2, 3, 4, 5, 6], 4, v => { planDays = v; });
+  segNum($('pfMinutes'), [30, 45, 60, 75], 60, v => { planMinutes = v; });
+
+  const eq = $('pfEquip');
+  const present = new Set(ALL.map(e => e.equipment && e.equipment !== 'None' ? e.equipment : 'body only'));
+  for (const name of PLAN_EQUIP) {
+    if (!present.has(name)) continue;
+    const b = document.createElement('button');
+    b.className = 'pick';
+    b.textContent = cap(name);
+    b.addEventListener('click', () => {
+      planEquip.has(name) ? planEquip.delete(name) : planEquip.add(name);
+      b.classList.toggle('on');
+    });
+    eq.appendChild(b);
+  }
+
+  const mu = $('pfMuscles');
+  for (const m of MUSCLES) {
+    const b = document.createElement('button');
+    b.className = 'pick';
+    b.dataset.muscle = m;
+    b.textContent = cap(m);
+    b.addEventListener('click', () => togglePriority(m));
+    mu.appendChild(b);
+  }
+
+  $('pfGo').addEventListener('click', generateWeek);
+}
+
+function togglePriority(m) {
+  planPriority.has(m) ? planPriority.delete(m) : planPriority.add(m);
+  document.querySelectorAll('#pfMuscles .pick').forEach(b =>
+    b.classList.toggle('on', planPriority.has(b.dataset.muscle)));
+  setHighlight([...planPriority], []);
+  stageLabel.textContent = planPriority.size
+    ? `Priority: ${[...planPriority].join(', ')}` : 'Full body';
+}
+
+function generateWeek() {
+  lastPlan = buildPlan(ALL, {
+    days: planDays, minutes: planMinutes,
+    level: $('pfLevel').value, goal: $('pfGoal').value,
+    equipment: [...planEquip], priority: [...planPriority],
+  });
+  renderWeek(lastPlan);
+  paintVolume(lastPlan);
+}
+
+function renderWeek(plan) {
+  $('weekSplit').textContent = plan.split;
+  /* direct sets only — summing every muscle would double-count assisting work */
+  const direct = plan.sessions.reduce((s, d) => s + d.items.reduce((n, i) => n + i.sets, 0), 0);
+  const bal = balance(plan.volume);
+  $('weekNote').textContent =
+    `${plan.sessions.length} sessions · ${direct} direct working sets · push ${bal.push} vs pull ${bal.pull} · posterior ${bal.posterior} vs anterior ${bal.anterior}`;
+
+  const warn = plan.warnings.length
+    ? `<div class="warnbox"><span class="callout-title">Where this week falls short</span>${
+        plan.warnings.map(w => `<p>${w}</p>`).join('')}</div>` : '';
+
+  const days = plan.sessions.map(s => `
+    <div class="daycard">
+      <div class="dayhead"><span class="dayname">${s.name}</span><span class="daymeta">${s.items.length} exercises</span></div>
+      ${s.items.map(it => `
+        <div class="planrow${it.priority ? ' prio' : ''}">
+          <div class="pr-main">
+            <button class="pr-name" data-ex="${it.exercise.id}">${it.exercise.name}</button>
+            <span class="pr-sub">${it.muscle} · ${it.exercise.mechanic || 'compound'}</span>
+          </div>
+          <div class="pr-rx"><b>${it.sets}×${it.reps}</b><span>${it.rest}</span></div>
+        </div>`).join('')}
+    </div>`).join('');
+
+  /* weekly volume table — the thing most apps never show */
+  const rows = MUSCLES
+    .map(m => [m, plan.volume[m] || 0])
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...rows.map(r => r[1]));
+  const volTable = `
+    <div class="volblock">
+      <span class="overline">Weekly sets per muscle</span>
+      ${rows.map(([m, v]) => `
+        <div class="volrow${planPriority.has(m) ? ' prio' : ''}">
+          <span class="vm">${m}</span>
+          <span class="vbar"><i style="width:${(v / max) * 100}%"></i></span>
+          <span class="vn">${round(v)}</span>
+        </div>`).join('')}
+      <p class="volnote">Secondary involvement counts as half a set. Around 10–20 sets a week drives
+        growth for a trained muscle; roughly 4–6 maintains.</p>
+    </div>`;
+
+  $('weekBody').innerHTML = warn + days + volTable;
+  $('weekBody').querySelectorAll('.pr-name').forEach(b =>
+    b.addEventListener('click', () => {
+      const ex = ALL.find(e => e.id === b.dataset.ex);
+      if (ex) { setPlanMode(false); selectExercise(ex); }
+    }));
+}
+
+/* Paint the week against each muscle's own goal rather than against the
+   biggest number in the week. "Am I short here?" is the useful question;
+   a plain magnitude ramp just turns the whole body one colour. */
+const C_UNDER = new THREE.Color('#8a3b32');
+const C_OVER  = new THREE.Color('#efa733');
+
+function paintVolume(plan) {
+  coverageOn = false;
+  const { volume, target } = plan;
+  for (const [name, g] of Object.entries(muscleGroups)) {
+    const goal = planPriority.has(name) ? target : 6;
+    const ratio = (volume[name] || 0) / goal;
+    let col, glow;
+    if (ratio < 0.6) { col = C_UNDER; glow = 0.05 + 0.10 * ratio; }
+    else if (ratio > 1.35) { col = C_OVER; glow = 0.18; }
+    else { col = C.covHigh; glow = 0.20; }
+    g.mat.color.copy(col);
+    g.mat.emissive.copy(col);
+    g.mat.emissiveIntensity = glow;
+    g.state = 'coverage';
+  }
+  document.getElementById('legend').hidden = true;
+  const cov = document.getElementById('legendCoverage');
+  cov.hidden = false;
+  cov.innerHTML = `
+    <span class="lg">Volume vs target</span>
+    <span class="lg"><i class="dot" style="background:#8a3b32"></i>Under</span>
+    <span class="lg"><i class="dot" style="background:#3fd8c6"></i>On target</span>
+    <span class="lg"><i class="dot" style="background:#efa733"></i>Over</span>`;
+  stageLabel.textContent = 'Weekly volume';
+}
+
+function setPlanMode(on) {
+  planMode = on;
+  $('plannerPanel').hidden = !on;
+  $('libraryPanel').hidden = on;
+  $('weekPanel').hidden = !on;
+  $('detailPanel').hidden = on;
+  $('modeBtn').textContent = on ? 'Browse library' : 'Plan a week';
+  $('modeBtn').classList.toggle('on', on);
+  if (!on) {
+    document.getElementById('legend').hidden = false;
+    document.getElementById('legendCoverage').hidden = true;
+    setHighlight([], []);
+    stageLabel.textContent = 'Full body';
+  } else {
+    setHighlight([...planPriority], []);
+  }
+}
+
+$('modeBtn').addEventListener('click', () => setPlanMode(!planMode));
