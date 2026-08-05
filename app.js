@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { DRACOLoader } from './vendor/DRACOLoader.js';
-import { buildPlan, balance, round } from './plan.js';
+import { buildPlan, balance, round, alternativesFor, swapExercise } from './plan.js';
 
 /* ============================================================
    Kinetic Atlas — 873 exercises mapped onto a real anatomical model
@@ -983,7 +983,8 @@ function initPlanner() {
     mu.appendChild(b);
   }
 
-  $('pfGo').addEventListener('click', generateWeek);
+  $('pfGo').addEventListener('click', () => generateWeek(0));
+  $('pfShuffle').addEventListener('click', () => generateWeek(planVariety + 1));
 }
 
 function togglePriority(m) {
@@ -995,14 +996,19 @@ function togglePriority(m) {
     ? `Priority: ${[...planPriority].join(', ')}` : 'Full body';
 }
 
-function generateWeek() {
+let planVariety = 0;
+
+function generateWeek(variety = 0) {
+  planVariety = variety;
   lastPlan = buildPlan(ALL, {
     days: planDays, minutes: planMinutes,
     level: $('pfLevel').value, goal: $('pfGoal').value,
     equipment: [...planEquip], priority: [...planPriority],
+    variety,
   });
   renderWeek(lastPlan);
   paintVolume(lastPlan);
+  $('pfShuffle').hidden = false;
 }
 
 function renderWeek(plan) {
@@ -1017,16 +1023,19 @@ function renderWeek(plan) {
     ? `<div class="warnbox"><span class="callout-title">Where this week falls short</span>${
         plan.warnings.map(w => `<p>${w}</p>`).join('')}</div>` : '';
 
-  const days = plan.sessions.map(s => `
+  const days = plan.sessions.map((s, di) => `
     <div class="daycard">
       <div class="dayhead"><span class="dayname">${s.name}</span><span class="daymeta">${s.items.length} exercises</span></div>
-      ${s.items.map(it => `
+      ${s.items.map((it, ii) => `
         <div class="planrow${it.priority ? ' prio' : ''}">
           <div class="pr-main">
             <button class="pr-name" data-ex="${it.exercise.id}">${it.exercise.name}</button>
             <span class="pr-sub">${it.muscle} · ${it.exercise.mechanic || 'compound'}</span>
           </div>
           <div class="pr-rx"><b>${it.sets}×${it.reps}</b><span>${it.rest}</span></div>
+          <button class="swapbtn" data-d="${di}" data-i="${ii}" title="Swap for another ${it.muscle} exercise" aria-label="Swap exercise">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h13l-3-3M20 17H7l3 3"/></svg>
+          </button>
         </div>`).join('')}
     </div>`).join('');
 
@@ -1055,6 +1064,8 @@ function renderWeek(plan) {
       const ex = ALL.find(e => e.id === b.dataset.ex);
       if (ex) showPlanExercise(ex);
     }));
+  $('weekBody').querySelectorAll('.swapbtn').forEach(b =>
+    b.addEventListener('click', () => openSwap(b, +b.dataset.d, +b.dataset.i)));
 }
 
 /* Paint the week against each muscle's own goal rather than against the
@@ -1131,3 +1142,35 @@ $('planBack').addEventListener('click', backToWeek);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && planMode && !$('planBack').hidden) backToWeek();
 });
+
+/* ---------- swapping an exercise inside a generated week ---------- */
+function openSwap(btn, dayIndex, itemIndex) {
+  const row = btn.closest('.planrow');
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains('swapbox')) { existing.remove(); return; }
+  document.querySelectorAll('.swapbox').forEach(el => el.remove());
+
+  const item = lastPlan.sessions[dayIndex].items[itemIndex];
+  const alts = alternativesFor(lastPlan, item.muscle, item.exercise.id);
+
+  const box = document.createElement('div');
+  box.className = 'swapbox';
+  if (!alts.length) {
+    box.innerHTML = `<p class="swapnone">No other ${item.muscle} exercise is available with the equipment selected.</p>`;
+  } else {
+    box.innerHTML = `<span class="swaphead">Swap ${item.muscle} exercise</span>` +
+      alts.map((e, i) => `
+        <button class="swapopt" data-i="${i}">
+          <span class="so-name">${e.name}</span>
+          <span class="so-meta">${e.equipment && e.equipment !== 'None' ? e.equipment : 'body only'} · ${e.mechanic || '—'} · ${e.level}</span>
+        </button>`).join('');
+  }
+  row.insertAdjacentElement('afterend', box);
+
+  box.querySelectorAll('.swapopt').forEach(b =>
+    b.addEventListener('click', () => {
+      swapExercise(lastPlan, dayIndex, itemIndex, alts[+b.dataset.i]);
+      renderWeek(lastPlan);
+      paintVolume(lastPlan);
+    }));
+}

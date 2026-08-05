@@ -96,10 +96,78 @@ function scoreExercise(e, muscle, opts) {
   return s;
 }
 
+/* Every exercise a muscle could be trained with, given the same equipment
+   constraint the plan was built under, best first. */
+export function alternativesFor(plan, muscle, excludeId, limit = 10) {
+  const { usable, opts } = plan.ctx;
+  const taken = new Set();
+  for (const s of plan.sessions) for (const i of s.items) taken.add(i.exercise.id);
+  taken.delete(excludeId);
+  return usable
+    .filter(e => e.primaryMuscles.includes(muscle) && !taken.has(e.id) && e.id !== excludeId)
+    .sort((a, b) => scoreExercise(b, muscle, opts) - scoreExercise(a, muscle, opts))
+    .slice(0, limit);
+}
+
+/* Swapping changes the prescription when the replacement is a different
+   kind of movement, so sets and rest are re-derived, not carried over. */
+export function swapExercise(plan, dayIndex, itemIndex, exercise) {
+  const item = plan.sessions[dayIndex].items[itemIndex];
+  const vol = VOLUME[plan.level] || VOLUME.intermediate;
+  const reps = GOALS[plan.goal] || GOALS.hypertrophy;
+  const isCompound = exercise.mechanic === 'compound';
+  item.exercise = exercise;
+  item.sets = isCompound ? vol.setsCompound : vol.setsIsolation;
+  item.reps = isCompound ? reps.compound : reps.isolation;
+  item.rest = isCompound ? reps.restC : reps.restI;
+  retally(plan);
+  return plan;
+}
+
+/* recompute weekly volume and warnings from whatever the sessions now hold */
+export function retally(plan) {
+  const volume = {};
+  for (const m of MUSCLES) volume[m] = 0;
+  for (const s of plan.sessions) {
+    for (const it of s.items) {
+      volume[it.muscle] += it.sets;
+      for (const sec of it.exercise.secondaryMuscles) {
+        if (sec !== it.muscle && sec in volume) volume[sec] += it.sets * 0.5;
+      }
+    }
+  }
+  plan.volume = volume;
+  plan.warnings = warningsFor(volume, plan.ctx.prio, plan.target, plan.ctx.usable, plan.ctx.hasEquip);
+  return plan;
+}
+
+function warningsFor(volume, prio, target, usable, hasEquip) {
+  const warnings = [];
+  for (const m of prio) {
+    if (volume[m] < target * 0.7) {
+      warnings.push(`${m}: ${round(volume[m])} sets against a ${target}-set target. ${
+        hasEquip ? 'The selected equipment limits what can be programmed.' : 'Add a day or lengthen sessions.'}`);
+    }
+  }
+  for (const m of MUSCLES) {
+    if (!prio.has(m) && volume[m] > 0 && volume[m] < 4) {
+      warnings.push(`${m}: ${round(volume[m])} sets, below the ~4 needed to maintain.`);
+    }
+  }
+  if (hasEquip) {
+    for (const m of prio) {
+      if (!usable.some(e => e.primaryMuscles.includes(m))) {
+        warnings.push(`${m}: no exercise in the library trains this with the equipment selected.`);
+      }
+    }
+  }
+  return warnings;
+}
+
 export function buildPlan(all, opts) {
   const {
     days = 4, equipment = [], priority = [], level = 'intermediate',
-    goal = 'hypertrophy', minutes = 60,
+    goal = 'hypertrophy', minutes = 60, variety = 0,
   } = opts;
 
   const split = SPLITS[Math.min(6, Math.max(2, days))];
@@ -135,7 +203,12 @@ export function buildPlan(all, opts) {
       const pool = usable
         .filter(e => e.primaryMuscles.includes(muscle))
         .sort((a, b) => scoreExercise(b, muscle, opts) - scoreExercise(a, muscle, opts));
-      const pick = pool.find(e => !used.has(e.id)) || pool[0];
+      /* variety walks down the shortlist so a reshuffle gives a different
+         but still sensible week rather than a random one */
+      const avail = pool.filter(e => !used.has(e.id));
+      const pick = avail.length
+        ? avail[(variety + MUSCLES.indexOf(muscle)) % Math.min(avail.length, 5)]
+        : pool[0];
       if (!pick) continue;
       used.add(pick.id);
 
@@ -162,27 +235,13 @@ export function buildPlan(all, opts) {
     sessions.push({ name: day.name, items });
   }
 
-  /* ---- honest reporting of where the week falls short ---- */
-  const warnings = [];
-  for (const m of prio) {
-    if (volume[m] < vol.target * 0.7) {
-      warnings.push(`${m}: ${round(volume[m])} sets against a ${vol.target}-set target. ${
-        eqSet.size ? 'The selected equipment limits what can be programmed.' : 'Add a day or lengthen sessions.'}`);
-    }
-  }
-  for (const m of MUSCLES) {
-    if (!prio.has(m) && volume[m] > 0 && volume[m] < 4) {
-      warnings.push(`${m}: ${round(volume[m])} sets, below the ~4 needed to maintain.`);
-    }
-  }
-  if (eqSet.size) {
-    const missing = [...prio].filter(m => !usable.some(e => e.primaryMuscles.includes(m)));
-    for (const m of missing) {
-      warnings.push(`${m}: no exercise in the library trains this with the equipment selected.`);
-    }
-  }
+  const warnings = warningsFor(volume, prio, vol.target, usable, eqSet.size > 0);
 
-  return { split: split.name, sessions, volume, warnings, target: vol.target, goal, level };
+  return {
+    split: split.name, sessions, volume, warnings,
+    target: vol.target, goal, level, variety,
+    ctx: { usable, prio, opts, hasEquip: eqSet.size > 0 },
+  };
 }
 
 export const round = (n) => Math.round(n * 10) / 10;
