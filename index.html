@@ -232,11 +232,16 @@
         <span class="overline accent" id="runDay">Session</span>
         <span class="run-count" id="runCount"></span>
       </div>
-      <button class="run-listbtn" id="runListBtn">All exercises</button>
+      <button class="run-listbtn on" id="runListBtn">Hide list</button>
       <div class="run-progress"><i id="runProgressBar"></i></div>
     </header>
 
     <div class="run-body">
+      <aside class="run-side" id="runSide">
+        <span class="overline">Session</span>
+        <div id="runSideList"></div>
+      </aside>
+
       <section class="run-main" id="runMain">
         <h2 id="runName">—</h2>
         <div class="run-meta" id="runMeta"></div>
@@ -254,11 +259,6 @@
           <ol class="steps" id="runStepList"></ol>
         </details>
       </section>
-
-      <aside class="run-side" id="runSide" hidden>
-        <span class="overline">Session</span>
-        <div id="runSideList"></div>
-      </aside>
     </div>
 
     <div class="run-rest" id="runRest" hidden>

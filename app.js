@@ -1382,12 +1382,15 @@ function drawRun() {
   $('runSideList').innerHTML = items.map((x, i) => {
     const d = doneArr(x).filter(Boolean).length;
     return `<button class="sideitem${i === run.index ? ' on' : ''}${d === x.sets ? ' complete' : ''}" data-i="${i}">
-      <span class="si-name">${x.exercise.name}</span>
-      <span class="si-meta">${d}/${x.sets} sets · ${x.muscle}</span>
+      <span class="si-name"><span class="si-num">${String(i + 1).padStart(2, '0')}</span>${x.exercise.name}</span>
+      <span class="si-meta">${d}/${x.sets} sets · ${x.muscle} · ${x.sets}×${x.reps}</span>
     </button>`;
   }).join('');
   $('runSideList').querySelectorAll('.sideitem').forEach(b =>
     b.addEventListener('click', () => { run.index = +b.dataset.i; saveRun(); drawRun(); }));
+
+  const cur = $('runSideList').querySelector('.sideitem.on');
+  if (cur) cur.scrollIntoView({ block: 'nearest' });
 
   $('runPrev').disabled = run.index === 0;
   $('runNext').textContent = run.index === items.length - 1 ? 'Finish session' : 'Next exercise';
@@ -1437,6 +1440,7 @@ $('runListBtn').addEventListener('click', () => {
   const s = $('runSide');
   s.hidden = !s.hidden;
   $('runListBtn').classList.toggle('on', !s.hidden);
+  $('runListBtn').textContent = s.hidden ? 'Show list' : 'Hide list';
 });
 $('restSkip').addEventListener('click', stopRest);
 $('restPlus').addEventListener('click', () => { restLeft += 30; restTotal += 30; tickRest(); });

@@ -570,7 +570,8 @@ body {
 }
 
 .run-body { flex: 1; display: flex; min-height: 0; }
-.run-main { flex: 1; overflow-y: auto; padding: 22px 24px 120px; max-width: 720px; margin: 0 auto; width: 100%; }
+.run-main { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 28px 120px; }
+.run-inner { max-width: 760px; margin: 0 auto; }
 .run-main h2 { font-family: var(--display); font-size: 30px; font-weight: 600; line-height: 1.12; text-wrap: balance; }
 .run-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 18px; }
 .rm {
@@ -580,7 +581,11 @@ body {
 }
 .rm.accent { color: var(--accent-ink); background: var(--accent); font-weight: 700; box-shadow: none; }
 
-.run-fig { position: relative; border-radius: 12px; overflow: hidden; background: #0e0c0b; aspect-ratio: 4/3; box-shadow: inset 0 0 0 1px var(--line); }
+.run-fig {
+  position: relative; border-radius: 12px; overflow: hidden; background: #0e0c0b;
+  aspect-ratio: 4/3; max-height: 40vh; margin: 0 auto; width: 100%;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
 .run-fig img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transition: opacity 0.6s; }
 #runImgB { opacity: 0; }
 .run-fig figcaption {
@@ -616,7 +621,7 @@ body {
 .run-steps[open] summary::after { content: " −"; }
 .run-steps .steps { margin-top: 14px; }
 
-.run-side { width: 300px; border-left: 1px solid var(--line); padding: 18px; overflow-y: auto; }
+.run-side { width: 320px; flex: none; border-right: 1px solid var(--line); padding: 18px; overflow-y: auto; }
 .sideitem {
   display: block; width: 100%; text-align: left; border: 0; cursor: pointer; font: inherit;
   background: transparent; color: var(--ink); padding: 11px 12px; border-radius: 9px; margin-top: 5px;
@@ -664,3 +669,6 @@ body {
 .run-nav button:disabled { opacity: 0.35; cursor: default; }
 .run-nav .run-next { flex: 2; color: var(--accent-ink); background: var(--accent); box-shadow: none; }
 @media (max-width: 820px) { .run-side { display: none; } }
+
+.si-num { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); margin-right: 7px; }
+.sideitem.on .si-num { color: var(--accent); }
