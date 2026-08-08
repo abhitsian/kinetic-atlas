@@ -43,6 +43,10 @@
       <div class="panel-head">
         <span class="overline accent">Plan a training week</span>
       </div>
+      <div class="savedwrap" id="savedWrap" hidden>
+        <span class="overline">Saved weeks</span>
+        <div class="savedlist" id="savedList"></div>
+      </div>
       <div class="planform">
         <label class="pf"><span>Days per week</span>
           <div class="seg seg-num" id="pfDays"></div>
@@ -190,6 +194,7 @@
       </div>
       <div id="weekBody"></div>
       <div class="week-actions">
+        <button class="primarybtn" id="weekSave">Save this week</button>
         <button class="ghostbtn" id="weekCopy">Copy the week as text</button>
       </div>
       <p class="disclaimer">Sets, reps and rest are standard training guidance applied on top of the

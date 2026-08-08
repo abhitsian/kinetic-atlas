@@ -836,3 +836,24 @@ body {
 @media (min-width: 861px) {
   body:not(.planning) .backbar { display: none; }
 }
+
+/* ---------- saved weeks ---------- */
+.savedwrap { padding: 0 15px 12px; display: flex; flex-direction: column; gap: 7px; }
+.savedwrap[hidden] { display: none; }
+.savedlist { display: flex; flex-direction: column; gap: 4px; }
+.saveditem { display: flex; gap: 4px; }
+.sv-load {
+  flex: 1; min-width: 0; text-align: left; border: 0; cursor: pointer; font: inherit;
+  background: var(--panel-2); color: var(--ink); padding: 9px 11px; border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.sv-load:hover { background: var(--panel-3); }
+.sv-name { display: block; font-size: 12px; font-weight: 600; line-height: 1.3; }
+.sv-meta { display: block; font-family: var(--mono); font-size: 9px; color: var(--ink-3); margin-top: 3px; letter-spacing: 0.04em; }
+.sv-del {
+  flex: none; border: 0; background: var(--panel-2); color: var(--ink-3);
+  padding: 0 9px; border-radius: 8px; cursor: pointer; line-height: 0;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.sv-del:hover { color: #e2664a; }
+.week-actions { display: flex; flex-direction: column; gap: 7px; }

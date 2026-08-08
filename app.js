@@ -556,6 +556,17 @@ loadExercises()
 
     buildEquipChips(data);
     initPlanner();
+    drawSavedList();
+    /* bring back the week that was open when the app was last closed */
+    const saved = readJSON(CURRENT_KEY, null);
+    if (saved && saved.sessions?.length) {
+      try {
+        applySavedOptsToForm(saved.opts);
+        basePlan = hydratePlan(saved);
+        weekIndex = saved.weekIndex || 0;
+        $('pfShuffle').hidden = false;
+      } catch { /* a stale shape should never block startup */ }
+    }
     const wantEx = readUrl();
     applyFiltersToControls();
     refreshList();
@@ -1046,6 +1057,7 @@ function showWeek(i) {
   retally(lastPlan);
   renderWeek(lastPlan);
   paintVolume(lastPlan);
+  if (basePlan) writeJSON(CURRENT_KEY, serializePlan(basePlan, null));
 }
 
 function renderWeek(plan) {
@@ -1220,6 +1232,7 @@ function setPlanMode(on) {
     stageLabel.textContent = 'Full body';
   } else {
     setHighlight([...planPriority], []);
+    if (basePlan) showWeek(weekIndex);
   }
 }
 $('modeBtn').addEventListener('click', () => setPlanMode(!planMode));
@@ -1600,3 +1613,118 @@ const setTabLabels = (l) => document.dispatchEvent(new CustomEvent('ka:labels', 
   document.addEventListener('ka:run', () => pushLayer('run', () => endRun()));
   document.addEventListener('ka:plan', () => pushLayer('plan', () => setPlanMode(false)));
 })();
+
+/* ============================================================
+   Saving weeks.
+
+   A plan is options plus the exercises actually chosen, and swapping or
+   shuffling changes the second without changing the first. So both are
+   stored: the options rebuild the context that swaps and warnings need,
+   and the stored exercise ids are laid back over the top so you get the
+   week you saved rather than a fresh generation from the same settings.
+   ============================================================ */
+const PLANS_KEY = 'kinetic-atlas-plans';
+const CURRENT_KEY = 'kinetic-atlas-current-plan';
+
+const readJSON = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
+const writeJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+function serializePlan(plan, name) {
+  return {
+    id: name ? `p${Date.now()}` : 'current',
+    name: name || null,
+    savedAt: new Date().toISOString().slice(0, 10),
+    opts: plan.ctx.opts,
+    weekIndex,
+    sessions: plan.sessions.map(s => ({
+      name: s.name,
+      finisherId: s.finisher ? s.finisher.exercise.id : null,
+      items: s.items.map(i => ({
+        exId: i.exercise.id, muscle: i.muscle, sets: i.sets, reps: i.reps,
+        restSec: i.restSec, rir: i.rir, warmups: i.warmups, priority: i.priority,
+      })),
+    })),
+  };
+}
+
+/* rebuild the live plan: options give the context, ids give the picks */
+function hydratePlan(saved) {
+  const fresh = buildPlan(ALL, saved.opts);
+  const byId = new Map(ALL.map(e => [e.id, e]));
+  fresh.sessions = saved.sessions.map(s => ({
+    name: s.name,
+    finisher: s.finisherId && byId.has(s.finisherId)
+      ? { exercise: byId.get(s.finisherId), sets: 2, reps: '30 s hold', restSec: 30, warmups: 0 }
+      : undefined,
+    items: s.items
+      .filter(i => byId.has(i.exId))
+      .map(i => ({ ...i, exercise: byId.get(i.exId) })),
+  }));
+  retally(fresh);
+  return fresh;
+}
+
+function applySavedOptsToForm(o) {
+  planDays = o.days; planMinutes = o.minutes; planVariety = o.variety || 0;
+  planPriority = new Set(o.priority || []);
+  planEquip = new Set(o.equipment || []);
+  planInjury = new Set(o.injuries || []);
+  $('pfLevel').value = o.level; $('pfGoal').value = o.goal;
+  $('pfDifficulty').value = o.difficulty || 'any';
+  $('pfMobility').checked = !!o.includeMobility;
+  const mark = (host, set, key) => document.querySelectorAll(host).forEach(b =>
+    b.classList.toggle('on', set.has(b.dataset[key])));
+  mark('#pfMuscles .pick', planPriority, 'muscle');
+  mark('#pfEquip .pick', planEquip, 'v');
+  mark('#pfInjury .pick', planInjury, 'v');
+  const seg = (host, val) => document.querySelectorAll(host + ' .segbtn').forEach(b =>
+    b.classList.toggle('active', +b.textContent === val));
+  seg('#pfDays', o.days); seg('#pfMinutes', o.minutes);
+}
+
+function loadPlan(saved) {
+  applySavedOptsToForm(saved.opts);
+  basePlan = hydratePlan(saved);
+  showWeek(saved.weekIndex || 0);
+  $('pfShuffle').hidden = false;
+  goTab('detail');
+}
+
+function drawSavedList() {
+  const plans = readJSON(PLANS_KEY, []);
+  $('savedWrap').hidden = plans.length === 0;
+  $('savedList').innerHTML = plans.map(p => `
+    <div class="saveditem">
+      <button class="sv-load" data-id="${p.id}">
+        <span class="sv-name">${p.name}</span>
+        <span class="sv-meta">${p.sessions.length} sessions · saved ${p.savedAt}</span>
+      </button>
+      <button class="sv-del" data-id="${p.id}" aria-label="Delete">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>`).join('');
+  $('savedList').querySelectorAll('.sv-load').forEach(b => b.addEventListener('click', () => {
+    const p = readJSON(PLANS_KEY, []).find(x => x.id === b.dataset.id);
+    if (p) loadPlan(p);
+  }));
+  $('savedList').querySelectorAll('.sv-del').forEach(b => b.addEventListener('click', () => {
+    writeJSON(PLANS_KEY, readJSON(PLANS_KEY, []).filter(x => x.id !== b.dataset.id));
+    drawSavedList();
+  }));
+}
+
+function saveCurrentWeek() {
+  if (!basePlan) return;
+  const prio = [...planPriority];
+  const suggested = `${basePlan.split}${prio.length ? ' · ' + prio.join(', ') : ''}`;
+  const name = (prompt('Name this week', suggested) || '').trim();
+  if (!name) return;
+  const plans = readJSON(PLANS_KEY, []);
+  plans.unshift({ ...serializePlan(basePlan, name), name });
+  writeJSON(PLANS_KEY, plans.slice(0, 20));
+  drawSavedList();
+  const b = $('weekSave'), t = b.textContent;
+  b.textContent = 'Saved'; setTimeout(() => { b.textContent = t; }, 1400);
+}
+
+$('weekSave').addEventListener('click', saveCurrentWeek);
