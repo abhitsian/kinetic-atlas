@@ -8,7 +8,7 @@
    as you view them, so anything you have opened before stays available.
 */
 
-const VERSION = 'ka-v1';
+const VERSION = 'ka-v2';
 const SHELL = `${VERSION}-shell`;
 const PHOTOS = `${VERSION}-photos`;
 
@@ -77,22 +77,40 @@ self.addEventListener('fetch', (e) => {
 
   if (url.origin !== location.origin) return;
 
-  /* app shell and data: cache first, since none of it changes mid-session */
+  /* Two policies, because the assets differ in kind.
+
+     Code and markup change; serving them cache-first meant a fix could sit
+     on the server while the app kept running the old build. They go
+     network-first, falling back to cache when there is no signal.
+
+     The model, the exercise data and the vendored libraries are large and
+     effectively immutable, so they stay cache-first and never re-download. */
+  const isCode = /\.(html|js|css|webmanifest)$/.test(url.pathname) || req.mode === 'navigate';
+
   e.respondWith((async () => {
     const cache = await caches.open(SHELL);
-    const hit = await cache.match(req, { ignoreSearch: true });
-    if (hit) {
-      /* refresh in the background so the next load is current */
-      fetch(req).then(res => { if (res.ok) cache.put(req, res.clone()); }).catch(() => {});
-      return hit;
+
+    if (isCode) {
+      try {
+        const res = await fetch(req);
+        if (res.ok) cache.put(req, res.clone());
+        return res;
+      } catch {
+        const hit = await cache.match(req, { ignoreSearch: true });
+        if (hit) return hit;
+        const shell = await cache.match('./index.html');
+        if (req.mode === 'navigate' && shell) return shell;
+        return Response.error();
+      }
     }
+
+    const hit = await cache.match(req, { ignoreSearch: true });
+    if (hit) return hit;
     try {
       const res = await fetch(req);
       if (res.ok) cache.put(req, res.clone());
       return res;
     } catch {
-      const shell = await cache.match('./index.html');
-      if (req.mode === 'navigate' && shell) return shell;
       return Response.error();
     }
   })());

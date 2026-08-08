@@ -1026,6 +1026,7 @@ function generateWeek(variety = 0) {
   });
   showWeek(0);
   $('pfShuffle').hidden = false;
+  goTab('detail');
 }
 
 function showWeek(i) {
@@ -1197,6 +1198,8 @@ function setPlanMode(on) {
   $('planBack').hidden = true;
   $('modeBtn').textContent = on ? 'Browse library' : 'Plan a week';
   $('modeBtn').classList.toggle('on', on);
+  setTabLabels(on ? ['Plan', 'Body', 'Week'] : ['Library', 'Body', 'Detail']);
+  goTab(on ? 'list' : 'list');
   if (!on) {
     document.getElementById('legend').hidden = false;
     document.getElementById('legendCoverage').hidden = true;
@@ -1460,18 +1463,29 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ---------- phone tabs ---------- */
+const isPhone = () => window.matchMedia('(max-width: 860px)').matches;
+
 (function tabs() {
   const bar = document.getElementById('tabbar');
   if (!bar) return;
+  const btns = [...bar.querySelectorAll('.tabbtn')];
   const set = (t) => {
     document.body.dataset.tab = t;
-    bar.querySelectorAll('.tabbtn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+    btns.forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   };
-  bar.querySelectorAll('.tabbtn').forEach(b => b.addEventListener('click', () => set(b.dataset.tab)));
+  btns.forEach(b => b.addEventListener('click', () => set(b.dataset.tab)));
   set('list');
 
-  /* picking something should show you the thing you picked */
-  document.addEventListener('ka:selected', () => {
-    if (window.matchMedia('(max-width: 860px)').matches) set('detail');
+  /* the tabs mean different things in the planner, so they say so */
+  document.addEventListener('ka:labels', (e) => {
+    const [a, b2, c] = e.detail;
+    btns[0].textContent = a; btns[1].textContent = b2; btns[2].textContent = c;
   });
+
+  /* whatever the app opens, bring the phone to it */
+  document.addEventListener('ka:tab', (e) => { if (isPhone()) set(e.detail); });
+  document.addEventListener('ka:selected', () => { if (isPhone()) set('detail'); });
 })();
+
+const goTab = (t) => document.dispatchEvent(new CustomEvent('ka:tab', { detail: t }));
+const setTabLabels = (l) => document.dispatchEvent(new CustomEvent('ka:labels', { detail: l }));
