@@ -692,10 +692,12 @@ body {
   .modebtn { order: 3; }
   .searchwrap { order: 2; width: auto; flex: 1; min-width: 120px; }
 
-  .layout {
-    display: block; padding: 0 10px;
-    height: calc(100% - 108px);
-  }
+  /* Flex column instead of a magic height: the top bar wraps to two rows
+     on narrow screens, so any fixed offset put the panel behind the tabs
+     and clipped the primary button. */
+  body { display: flex; flex-direction: column; }
+  .topbar { flex: none; }
+  .layout { flex: 1; min-height: 0; display: block; padding: 0 10px; height: auto; }
   .panel, .stage { height: 100%; border-radius: 12px; }
 
   /* one section at a time */
@@ -706,9 +708,10 @@ body {
   body[data-tab="detail"] #detailPanel:not([hidden]),
   body[data-tab="detail"] #weekPanel:not([hidden]) { display: flex; }
 
+  /* in flow, not fixed, so it can never sit on top of a panel */
   .tabbar {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    flex: none; z-index: 40;
     padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
     background: var(--bg); border-top: 1px solid var(--line);
   }
@@ -734,4 +737,18 @@ body {
   .run-main h2 { font-size: 23px; }
   .run-nav { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
   .run-rest { bottom: calc(96px + env(safe-area-inset-bottom)); }
+}
+
+/* The plan form is long. Keep its primary action pinned to the bottom of
+   the panel so Generate is reachable without scrolling to the end. */
+.planner { position: relative; }
+.planfoot {
+  position: sticky; bottom: 0; z-index: 2;
+  background: var(--panel);
+  box-shadow: 0 -8px 16px -8px rgba(0,0,0,0.7);
+}
+@media (max-width: 860px) {
+  .stage-caption { bottom: 14px; }
+  .rotpill { bottom: 14px; }
+  .stage-tools { bottom: 62px; }
 }
