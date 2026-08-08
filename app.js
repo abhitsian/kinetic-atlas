@@ -778,6 +778,8 @@ function clearAll() {
   stageLabel.textContent = 'Full body';
   refreshList();
   syncEquipChips();
+  document.dispatchEvent(new CustomEvent('ka:muscle', { detail: null }));
+  document.dispatchEvent(new CustomEvent('ka:filter', { detail: null }));
 }
 
 /* ---------- URL state: filters survive a reload and can be shared ---------- */
@@ -825,6 +827,8 @@ function selectMuscleFilter(muscle) {
   hideDetail();
   previewMuscle(muscle);
   refreshList();
+  document.dispatchEvent(new CustomEvent('ka:muscle', { detail: muscle }));
+  document.dispatchEvent(new CustomEvent('ka:filter', { detail: muscle }));
 }
 
 /* ============================================================
@@ -1489,3 +1493,40 @@ const isPhone = () => window.matchMedia('(max-width: 860px)').matches;
 
 const goTab = (t) => document.dispatchEvent(new CustomEvent('ka:tab', { detail: t }));
 const setTabLabels = (l) => document.dispatchEvent(new CustomEvent('ka:labels', { detail: l }));
+
+/* ============================================================
+   Phone comprehension: state what a tap did, and where to see it
+   ============================================================ */
+(function phoneGuidance() {
+  const bar = $('tapResult'), hint = $('tapHint'), guide = $('guide');
+  if (!bar) return;
+
+  /* the result of tapping a muscle lands on a tab you are not looking at */
+  document.addEventListener('ka:muscle', (e) => {
+    if (!isPhone()) return;
+    const m = e.detail;
+    if (!m) { bar.hidden = true; hint.hidden = false; return; }
+    const n = muscleCounts[m] || 0;
+    $('trMuscle').textContent = m;
+    $('trCount').textContent = `${n} exercise${n === 1 ? '' : 's'} train it`;
+    bar.hidden = false;
+    hint.hidden = true;
+  });
+
+  $('trGo').addEventListener('click', () => goTab('list'));
+  $('trClear').addEventListener('click', () => { clearAll(); bar.hidden = true; hint.hidden = false; });
+
+  /* mark the tab whose contents changed */
+  document.addEventListener('ka:filter', (e) => {
+    const t = document.querySelector('.tabbtn[data-tab="list"]');
+    if (t) t.classList.toggle('hasfilter', !!e.detail);
+  });
+
+  /* three unlabelled tabs are not self-explanatory, so explain them once */
+  const SEEN = 'kinetic-atlas-guided';
+  if (isPhone() && !localStorage.getItem(SEEN)) guide.hidden = false;
+  $('guideGo').addEventListener('click', () => {
+    guide.hidden = true;
+    try { localStorage.setItem(SEEN, '1'); } catch {}
+  });
+})();

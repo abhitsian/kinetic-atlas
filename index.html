@@ -166,6 +166,17 @@
         <span class="switch"><input type="checkbox" id="autoRotate" checked><i></i></span>
       </label>
       <div class="hoverlabel" id="hoverLabel"></div>
+
+      <!-- Phone: tapping a muscle changes a list on another tab, so the
+           result is stated here with a way to go and see it. -->
+      <div class="tapresult" id="tapResult" hidden>
+        <div class="tr-text"><b id="trMuscle">—</b><span id="trCount"></span></div>
+        <button class="tr-go" id="trGo">See exercises</button>
+        <button class="tr-clear" id="trClear" aria-label="Clear">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <p class="tapthint" id="tapHint">Tap a muscle to see what trains it</p>
     </section>
 
     <!-- RIGHT: generated week -->
@@ -230,10 +241,25 @@
     </aside>
   </main>
 
+  <!-- Shown once on a phone: the three tabs are not self-explanatory -->
+  <div class="guide" id="guide" hidden>
+    <div class="guide-card">
+      <span class="overline accent">How this works</span>
+      <h2>Three views, one body</h2>
+      <ol class="guide-steps">
+        <li><b>Exercises</b><span>Browse or search all 873. Filter by the equipment you actually have.</span></li>
+        <li><b>Body</b><span>Tap any muscle on the model to see every exercise that trains it.</span></li>
+        <li><b>Detail</b><span>How to perform it, the muscles it works, and what it does anatomically.</span></li>
+      </ol>
+      <p class="guide-note">Use <b>Plan a week</b> at the top to build a training week, then press Start on any day to run the session in the gym.</p>
+      <button class="primarybtn" id="guideGo">Start exploring</button>
+    </div>
+  </div>
+
   <!-- Mobile only: the three-panel grid cannot work on a phone, so the
        panels become tabs and this bar switches between them. -->
   <nav class="tabbar" id="tabbar" aria-label="Sections">
-    <button class="tabbtn active" data-tab="list">Library</button>
+    <button class="tabbtn active" data-tab="list">Exercises</button>
     <button class="tabbtn" data-tab="stage">Body</button>
     <button class="tabbtn" data-tab="detail">Detail</button>
   </nav>
