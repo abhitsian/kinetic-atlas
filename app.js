@@ -908,6 +908,7 @@ function selectExercise(e) {
   $('dImpactText').textContent = impactText(e);
   syncClearChip();
   writeUrl();
+  document.dispatchEvent(new CustomEvent('ka:selected'));
 }
 
 const assistOf = (e) => e.secondaryMuscles.filter(m => !e.primaryMuscles.includes(m));
@@ -1450,3 +1451,27 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight') $('runNext').click();
   if (e.key === 'ArrowLeft') $('runPrev').click();
 });
+
+/* ---------- installable, and usable in a gym with no signal ---------- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+/* ---------- phone tabs ---------- */
+(function tabs() {
+  const bar = document.getElementById('tabbar');
+  if (!bar) return;
+  const set = (t) => {
+    document.body.dataset.tab = t;
+    bar.querySelectorAll('.tabbtn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  };
+  bar.querySelectorAll('.tabbtn').forEach(b => b.addEventListener('click', () => set(b.dataset.tab)));
+  set('list');
+
+  /* picking something should show you the thing you picked */
+  document.addEventListener('ka:selected', () => {
+    if (window.matchMedia('(max-width: 860px)').matches) set('detail');
+  });
+})();

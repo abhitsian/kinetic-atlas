@@ -672,3 +672,66 @@ body {
 
 .si-num { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); margin-right: 7px; }
 .sideitem.on .si-num { color: var(--accent); }
+
+/* ============================================================
+   Phone. The three-panel grid cannot shrink into a phone, so the
+   panels become tabs and one shows at a time. The runner already
+   owns the screen, so it needs almost nothing here.
+   ============================================================ */
+.tabbar { display: none; }
+
+@media (max-width: 860px) {
+  body { overflow: hidden; }
+
+  .topbar {
+    height: auto; flex-wrap: wrap; gap: 8px; padding: 10px 12px;
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+  .brand h1 { font-size: 15px; }
+  .tagline, .topnav { display: none; }
+  .modebtn { order: 3; }
+  .searchwrap { order: 2; width: auto; flex: 1; min-width: 120px; }
+
+  .layout {
+    display: block; padding: 0 10px;
+    height: calc(100% - 108px);
+  }
+  .panel, .stage { height: 100%; border-radius: 12px; }
+
+  /* one section at a time */
+  .layout > * { display: none; }
+  body[data-tab="list"] #libraryPanel,
+  body[data-tab="list"] #plannerPanel:not([hidden]),
+  body[data-tab="stage"] .stage,
+  body[data-tab="detail"] #detailPanel:not([hidden]),
+  body[data-tab="detail"] #weekPanel:not([hidden]) { display: flex; }
+
+  .tabbar {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    background: var(--bg); border-top: 1px solid var(--line);
+  }
+  .tabbtn {
+    border: 0; font: inherit; font-family: var(--mono); cursor: pointer;
+    font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--ink-3); background: var(--panel-2); padding: 11px 6px; border-radius: 9px;
+  }
+  .tabbtn.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+
+  /* touch targets and breathing room */
+  .exitem { padding: 12px 10px; }
+  .filters { grid-template-columns: 1fr 1fr; }
+  .tipnote, .credit { display: none; }
+  .stage-tools { top: auto; bottom: 14px; left: 14px; transform: none; flex-direction: row; }
+  .stage-caption { bottom: 62px; }
+  .rotpill { bottom: 62px; }
+  .detail-body, .dwrap { padding: 14px; }
+
+  /* runner: full bleed, list collapses to the toggle */
+  .run-top { padding-top: max(14px, env(safe-area-inset-top)); }
+  .run-main { padding: 16px 16px 130px; }
+  .run-main h2 { font-size: 23px; }
+  .run-nav { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  .run-rest { bottom: calc(96px + env(safe-area-inset-bottom)); }
+}

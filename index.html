@@ -2,8 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Kinetic Atlas — every exercise, mapped to the body</title>
+<meta name="theme-color" content="#131110">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kinetic">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="styles.css">
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.js" } }
@@ -221,6 +229,14 @@
       </div>
     </aside>
   </main>
+
+  <!-- Mobile only: the three-panel grid cannot work on a phone, so the
+       panels become tabs and this bar switches between them. -->
+  <nav class="tabbar" id="tabbar" aria-label="Sections">
+    <button class="tabbtn active" data-tab="list">Library</button>
+    <button class="tabbtn" data-tab="stage">Body</button>
+    <button class="tabbtn" data-tab="detail">Detail</button>
+  </nav>
 
   <!-- WORKOUT RUNNER: the in-gym interface -->
   <div class="run" id="runOverlay" hidden>
