@@ -830,3 +830,9 @@ body {
     background: var(--accent); margin-left: 6px; vertical-align: 1px;
   }
 }
+
+/* the back bar is a phone affordance; desktop shows all panels at once
+   and already has the clear chip on the stage */
+@media (min-width: 861px) {
+  body:not(.planning) .backbar { display: none; }
+}

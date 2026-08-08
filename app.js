@@ -1202,8 +1202,10 @@ function setPlanMode(on) {
   $('planBack').hidden = true;
   $('modeBtn').textContent = on ? 'Browse library' : 'Plan a week';
   $('modeBtn').classList.toggle('on', on);
-  setTabLabels(on ? ['Plan', 'Body', 'Week'] : ['Library', 'Body', 'Detail']);
-  goTab(on ? 'list' : 'list');
+  document.body.classList.toggle('planning', on);
+  setTabLabels(on ? ['Plan', 'Body', 'Week'] : ['Exercises', 'Body', 'Detail']);
+  goTab('list');
+  if (on) document.dispatchEvent(new CustomEvent('ka:plan'));
   if (!on) {
     document.getElementById('legend').hidden = false;
     document.getElementById('legendCoverage').hidden = true;
@@ -1307,6 +1309,7 @@ function startRun(dayIndex, resume) {
   $('runOverlay').hidden = false;
   document.body.classList.add('running');
   drawRun();
+  document.dispatchEvent(new CustomEvent('ka:run'));
 }
 
 function endRun() {
@@ -1529,4 +1532,64 @@ const setTabLabels = (l) => document.dispatchEvent(new CustomEvent('ka:labels', 
     guide.hidden = true;
     try { localStorage.setItem(SEEN, '1'); } catch {}
   });
+})();
+
+/* ============================================================
+   Navigation: one back control, and a working system back gesture.
+
+   The tab bar already switches sections, so a button that only does
+   what a tab does would be duplicate chrome. What was missing is a way
+   OUT of a thing you opened: the detail view on a phone was a dead end,
+   and in standalone mode there is no browser chrome, so the OS back
+   gesture had nothing to act on.
+   ============================================================ */
+(function navigation() {
+  const back = $('planBack'), label = $('planBackLabel');
+
+  /* what "back" means depends on what you opened */
+  const showBack = (text) => { label.textContent = text; back.hidden = false; };
+  const hideBack = () => { back.hidden = true; };
+
+  document.addEventListener('ka:selected', () => {
+    if (!planMode && isPhone()) showBack('Back to exercises');
+  });
+
+  /* leaving the detail view clears what it was showing */
+  function closeDetail() {
+    hideBack();
+    selectedId = null;
+    hideDetail();
+    setHighlight([], []);
+    stageLabel.textContent = filters.muscle ? cap(filters.muscle) : 'Full body';
+    refreshList();
+    syncClearChip();
+    writeUrl();
+    goTab('list');
+  }
+
+  back.addEventListener('click', (e) => {
+    if (planMode) return;            /* the planner keeps its own handler */
+    e.stopImmediatePropagation();
+    closeDetail();
+  }, true);
+
+  /* --- system back: iOS edge-swipe and the Android back button --- */
+  const layers = [];
+  function pushLayer(name, close) {
+    layers.push({ name, close });
+    history.pushState({ ka: name }, '');
+  }
+  window.addEventListener('popstate', () => {
+    const top = layers.pop();
+    if (top) top.close();
+  });
+
+  document.addEventListener('ka:layer', (e) => pushLayer(e.detail.name, e.detail.close));
+
+  /* opening any of these becomes a step the gesture can undo */
+  document.addEventListener('ka:selected', () => {
+    if (!planMode && isPhone()) pushLayer('detail', closeDetail);
+  });
+  document.addEventListener('ka:run', () => pushLayer('run', () => endRun()));
+  document.addEventListener('ka:plan', () => pushLayer('plan', () => setPlanMode(false)));
 })();
