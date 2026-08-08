@@ -452,13 +452,20 @@ viewport.addEventListener('pointermove', (e) => {
     hoverLabel.classList.remove('on');
   }
 });
-viewport.addEventListener('pointerdown', (e) => { downPos = [e.clientX, e.clientY]; viewport.classList.add('dragging'); });
+viewport.addEventListener('pointerdown', (e) => {
+  downPos = [e.clientX, e.clientY, e.pointerType];
+  viewport.classList.add('dragging');
+});
 viewport.addEventListener('pointerup', (e) => {
   viewport.classList.remove('dragging');
   if (!downPos) return;
   const moved = Math.hypot(e.clientX - downPos[0], e.clientY - downPos[1]);
+  const wasTouch = downPos[2] !== 'mouse';
   downPos = null;
-  if (moved > 5) return;
+  /* A thumb drifts several pixels during a tap, far more than a mouse.
+     At 5px most real taps on a phone were read as drags and did nothing,
+     which looked exactly like the muscle filter being broken. */
+  if (moved > (wasTouch ? 16 : 5)) return;
   const m = pick(e);
   if (m) selectMuscleFilter(m);
 });
