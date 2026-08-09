@@ -556,16 +556,22 @@ loadExercises()
 
     buildEquipChips(data);
     initPlanner();
-    drawSavedList();
-    /* bring back the week that was open when the app was last closed */
-    const saved = readJSON(CURRENT_KEY, null);
-    if (saved && saved.sessions?.length) {
-      try {
+
+    /* Restoring saved work is optional: if any of it fails, the library
+       must still render. This was the difference between an app that
+       works offline and one stuck on "Loading". */
+    try {
+      drawSavedList();
+      const saved = readJSON(CURRENT_KEY, null);
+      if (saved && saved.sessions && saved.sessions.length) {
         applySavedOptsToForm(saved.opts);
         basePlan = hydratePlan(saved);
         weekIndex = saved.weekIndex || 0;
         $('pfShuffle').hidden = false;
-      } catch { /* a stale shape should never block startup */ }
+      }
+    } catch (err) {
+      console.error('[kinetic-atlas] could not restore saved plan', err);
+      window.__restoreError = String(err && err.stack || err);
     }
     const wantEx = readUrl();
     applyFiltersToControls();
@@ -577,7 +583,12 @@ loadExercises()
       previewMuscle(filters.muscle);
     }
   })
-  .catch(() => { /* already reported */ });
+  .catch((err) => {
+    /* a failure in the optional boot work must not leave the library
+       stuck on "Loading", and must not disappear silently */
+    console.error('[kinetic-atlas] boot', err);
+    window.__bootError = String(err && err.stack || err);
+  });
 
 /* Movement pattern, derived from the exercise name, mechanic and force.
    The dataset has no pattern field, so this is inference — it returns null
@@ -1057,7 +1068,10 @@ function showWeek(i) {
   retally(lastPlan);
   renderWeek(lastPlan);
   paintVolume(lastPlan);
-  if (basePlan) writeJSON(CURRENT_KEY, serializePlan(basePlan, null));
+  if (basePlan) {
+    writeJSON(CURRENT_KEY, serializePlan(basePlan, null));
+    prefetchWeekPhotos(lastPlan);
+  }
 }
 
 function renderWeek(plan) {
@@ -1691,9 +1705,13 @@ function loadPlan(saved) {
 }
 
 function drawSavedList() {
+  /* markup and code can briefly disagree after an update, so a missing
+     element degrades rather than taking the whole boot down with it */
+  const wrap = $('savedWrap'), list = $('savedList');
+  if (!wrap || !list) return;
   const plans = readJSON(PLANS_KEY, []);
-  $('savedWrap').hidden = plans.length === 0;
-  $('savedList').innerHTML = plans.map(p => `
+  wrap.hidden = plans.length === 0;
+  list.innerHTML = plans.map(p => `
     <div class="saveditem">
       <button class="sv-load" data-id="${p.id}">
         <span class="sv-name">${p.name}</span>
@@ -1703,11 +1721,11 @@ function drawSavedList() {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>`).join('');
-  $('savedList').querySelectorAll('.sv-load').forEach(b => b.addEventListener('click', () => {
+  list.querySelectorAll('.sv-load').forEach(b => b.addEventListener('click', () => {
     const p = readJSON(PLANS_KEY, []).find(x => x.id === b.dataset.id);
     if (p) loadPlan(p);
   }));
-  $('savedList').querySelectorAll('.sv-del').forEach(b => b.addEventListener('click', () => {
+  list.querySelectorAll('.sv-del').forEach(b => b.addEventListener('click', () => {
     writeJSON(PLANS_KEY, readJSON(PLANS_KEY, []).filter(x => x.id !== b.dataset.id));
     drawSavedList();
   }));
@@ -1728,3 +1746,77 @@ function saveCurrentWeek() {
 }
 
 $('weekSave').addEventListener('click', saveCurrentWeek);
+
+/* ============================================================
+   Offline photos.
+
+   The app shell, the 3D model and the exercise library are precached, so
+   the app itself runs with no signal. The demonstration photos are not:
+   they live on GitHub and were only cached once viewed, which is no use
+   in a gym where you planned the week at home.
+
+   So when a week exists, its photos are pulled down ahead of time. Only
+   that week's, rather than all 1,700, because the point is the session
+   you are about to do.
+   ============================================================ */
+const PHOTO_CACHE = 'ka-photos';
+
+function weekPhotoUrls(plan) {
+  const urls = new Set();
+  for (const s of plan.sessions) {
+    for (const it of s.items) for (const img of it.exercise.images || []) urls.add(IMG_BASE + img);
+    if (s.finisher) for (const img of s.finisher.exercise.images || []) urls.add(IMG_BASE + img);
+  }
+  return [...urls];
+}
+
+let prefetching = false;
+async function prefetchWeekPhotos(plan) {
+  if (!plan || prefetching || !('caches' in window)) return;
+  const stat = $('offlineStat');
+  if (!stat) return;
+  const urls = weekPhotoUrls(plan);
+  if (!urls.length) return;
+
+  const cache = await caches.open(PHOTO_CACHE);
+  const missing = [];
+  for (const u of urls) if (!(await cache.match(u))) missing.push(u);
+
+  if (!missing.length) {
+    stat.textContent = `All ${urls.length} images saved for offline use.`;
+    stat.className = 'offlinestat ok';
+    return;
+  }
+  if (!navigator.onLine) {
+    stat.textContent = `${urls.length - missing.length} of ${urls.length} images saved. Reconnect to finish.`;
+    stat.className = 'offlinestat warn';
+    return;
+  }
+
+  prefetching = true;
+  let done = urls.length - missing.length, failed = 0;
+  stat.className = 'offlinestat';
+  const tick = () => { stat.textContent = `Saving images for offline use… ${done}/${urls.length}`; };
+  tick();
+
+  /* a few at a time: this runs while the user reads the plan */
+  const queue = missing.slice();
+  const worker = async () => {
+    while (queue.length) {
+      const u = queue.shift();
+      try {
+        const res = await fetch(u, { mode: 'cors' });
+        if (res.ok) await cache.put(u, res.clone()); else failed++;
+      } catch { failed++; }
+      done++;
+      tick();
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  prefetching = false;
+
+  stat.textContent = failed
+    ? `${urls.length - failed} of ${urls.length} images saved for offline use.`
+    : `All ${urls.length} images saved for offline use.`;
+  stat.className = failed ? 'offlinestat warn' : 'offlinestat ok';
+}

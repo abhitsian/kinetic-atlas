@@ -8,9 +8,11 @@
    as you view them, so anything you have opened before stays available.
 */
 
-const VERSION = 'ka-v2';
+const VERSION = 'ka-v3';
 const SHELL = `${VERSION}-shell`;
-const PHOTOS = `${VERSION}-photos`;
+/* photos are costly to fetch and do not change, so they are kept out of
+   the versioned namespace and survive app updates */
+const PHOTOS = 'ka-photos';
 
 /* everything the app needs to boot and run a session with no network */
 const PRECACHE = [
@@ -33,6 +35,8 @@ const PRECACHE = [
   './vendor/draco/draco_decoder.wasm',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+  './icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (e) => {
@@ -48,7 +52,9 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(k => !k.startsWith(VERSION)).map(k => caches.delete(k)));
+    await Promise.all(keys
+      .filter(k => k !== PHOTOS && !k.startsWith(VERSION))
+      .map(k => caches.delete(k)));
     await self.clients.claim();
   })());
 });

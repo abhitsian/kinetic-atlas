@@ -857,3 +857,6 @@ body {
 }
 .sv-del:hover { color: #e2664a; }
 .week-actions { display: flex; flex-direction: column; gap: 7px; }
+.offlinestat { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.04em; color: var(--ink-3); line-height: 1.5; }
+.offlinestat.ok { color: var(--green); }
+.offlinestat.warn { color: var(--amber); }
