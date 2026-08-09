@@ -4,6 +4,7 @@ import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { DRACOLoader } from './vendor/DRACOLoader.js';
 import { buildPlan, balance, round, alternativesFor, swapExercise, relativeTo,
          applyWeek, retally, BLOCK, fmtMins, fmtRest } from './plan.js';
+import { SPLITS, matchExercise, buildAuditPlan, auditFindings } from './audit.js';
 
 /* ============================================================
    Kinetic Atlas — 873 exercises mapped onto a real anatomical model
@@ -556,6 +557,7 @@ loadExercises()
 
     buildEquipChips(data);
     initPlanner();
+    drawSplitPick();
 
     /* Restoring saved work is optional: if any of it fails, the library
        must still render. This was the difference between an app that
@@ -1228,6 +1230,7 @@ function paintVolume(plan) {
 
 function setPlanMode(on) {
   planMode = on;
+  if (on && auditMode) setAuditMode(false);
   $('plannerPanel').hidden = !on;
   $('libraryPanel').hidden = on;
   $('weekPanel').hidden = !on;
@@ -1820,3 +1823,126 @@ async function prefetchWeekPhotos(plan) {
     : `All ${urls.length} images saved for offline use.`;
   stat.className = failed ? 'offlinestat warn' : 'offlinestat ok';
 }
+
+/* ============================================================
+   Audit mode: read a routine someone already does, report the gaps.
+   ============================================================ */
+let auditMode = false;
+let auditDays = [];          /* [{name, text}] */
+let auditPlanObj = null;
+
+function setAuditMode(on) {
+  auditMode = on;
+  if (on && planMode) setPlanMode(false);
+  $('auditPanel').hidden = !on;
+  $('reportPanel').hidden = !on || !auditPlanObj;
+  $('libraryPanel').hidden = on;
+  $('detailPanel').hidden = on;
+  $('auditBtn').classList.toggle('on', on);
+  $('auditBtn').textContent = on ? 'Browse library' : 'Audit my routine';
+  document.body.classList.toggle('auditing', on);
+  setTabLabels(on ? ['Routine', 'Body', 'Gaps'] : ['Exercises', 'Body', 'Detail']);
+  goTab('list');
+  if (!on) {
+    setHighlight([], []);
+    document.getElementById('legend').hidden = false;
+    document.getElementById('legendCoverage').hidden = true;
+    stageLabel.textContent = 'Full body';
+  }
+}
+
+function drawSplitPick() {
+  $('splitPick').innerHTML = SPLITS.map(s => `
+    <button class="splitcard" data-id="${s.id}">
+      <span class="sc-name">${s.name}</span>
+      <span class="sc-sub">${s.sub}</span>
+    </button>`).join('');
+  $('splitPick').querySelectorAll('.splitcard').forEach(b =>
+    b.addEventListener('click', () => {
+      $('splitPick').querySelectorAll('.splitcard').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      const sp = SPLITS.find(x => x.id === b.dataset.id);
+      auditDays = sp.days.map(d => ({ name: d.name, text: d.ex.join(', ') }));
+      drawDayEdit();
+      $('step2').hidden = false;
+      runAudit();                      /* rung 1 pays off immediately */
+    }));
+}
+
+function drawDayEdit() {
+  $('dayEdit').innerHTML = auditDays.map((d, i) => `
+    <div class="dayrow">
+      <input class="dayname" data-i="${i}" value="${d.name}" aria-label="Day name">
+      <textarea class="daytext" data-i="${i}" rows="2" aria-label="Exercises">${d.text}</textarea>
+      <button class="dayrm" data-i="${i}" aria-label="Remove day">×</button>
+    </div>`).join('');
+  $('dayEdit').querySelectorAll('.dayname').forEach(el =>
+    el.addEventListener('change', () => { auditDays[+el.dataset.i].name = el.value; }));
+  $('dayEdit').querySelectorAll('.daytext').forEach(el =>
+    el.addEventListener('change', () => { auditDays[+el.dataset.i].text = el.value; runAudit(); }));
+  $('dayEdit').querySelectorAll('.dayrm').forEach(el =>
+    el.addEventListener('click', () => { auditDays.splice(+el.dataset.i, 1); drawDayEdit(); runAudit(); }));
+}
+
+/* "bench 4, incline db press 3" -> exercises with set counts */
+function parseDay(text) {
+  return text.split(',').map(chunk => {
+    const t = chunk.trim();
+    if (!t) return null;
+    const m = t.match(/^(.*?)[\s x×]*(\d{1,2})\s*(?:sets?)?$/i);
+    const q = (m ? m[1] : t).trim();
+    const sets = m ? Math.min(10, Math.max(1, +m[2])) : 3;
+    if (!q) return null;
+    return { q, sets, exercise: matchExercise(ALL, q) };
+  }).filter(Boolean);
+}
+
+function runAudit() {
+  const days = auditDays.map(d => ({ name: d.name, items: parseDay(d.text) }));
+  const unmatched = days.flatMap(d => d.items.filter(i => !i.exercise).map(i => i.q));
+
+  auditPlanObj = buildAuditPlan(ALL, days);
+  if (!auditPlanObj.sessions.length) { $('reportPanel').hidden = true; return; }
+  retally(auditPlanObj);
+  const { findings, total, balance: bal } = auditFindings(auditPlanObj);
+
+  $('reportPanel').hidden = false;
+  $('reportTitle').textContent = `${auditPlanObj.sessions.length} days a week`;
+  $('reportNote').textContent =
+    `${total} working sets · push ${bal.push} vs pull ${bal.pull} · posterior ${bal.posterior} vs anterior ${bal.anterior}`;
+
+  const warn = unmatched.length
+    ? `<div class="warnbox"><span class="callout-title">Not recognised</span><p>${
+        unmatched.join(', ')}. Try a plainer name, or search the library for the exact one.</p></div>` : '';
+
+  const cards = findings.map(f => `
+    <div class="finding f-${f.kind}">
+      <span class="fd-title">${f.title}</span>
+      <p>${f.body}</p>
+    </div>`).join('');
+
+  const rows = MUSCLES.map(m => [m, auditPlanObj.volume[m] || 0]).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...rows.map(r => r[1]));
+  const table = `
+    <div class="volblock">
+      <span class="overline">Weekly sets and frequency</span>
+      ${rows.map(([m, v]) => `
+        <div class="volrow${v === 0 ? ' zero' : ''}">
+          <span class="vm">${m}</span>
+          <span class="vbar"><i style="width:${(v / max) * 100}%"></i></span>
+          <span class="vn">${round(v)}</span>
+          <span class="vf">${auditPlanObj.actualFreq[m] || 0}×</span>
+        </div>`).join('')}
+    </div>`;
+
+  $('reportBody').innerHTML = warn + cards + table;
+  paintVolume({ volume: auditPlanObj.volume, target: 12 });
+  stageLabel.textContent = 'Your weekly volume';
+}
+
+$('auditBtn').addEventListener('click', () => setAuditMode(!auditMode));
+$('auditGo').addEventListener('click', () => { runAudit(); goTab('detail'); });
+$('addDay').addEventListener('click', () => {
+  auditDays.push({ name: `Day ${auditDays.length + 1}`, text: '' });
+  drawDayEdit();
+});

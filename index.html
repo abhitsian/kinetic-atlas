@@ -31,6 +31,7 @@
       <button class="navpill" data-cat="cardio">Cardio</button>
     </nav>
     <button class="modebtn" id="modeBtn">Plan a week</button>
+    <button class="modebtn alt" id="auditBtn">Audit my routine</button>
     <div class="searchwrap">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="search" type="search" placeholder="Search exercises, muscles…" autocomplete="off">
@@ -38,6 +39,34 @@
   </header>
 
   <main class="layout">
+    <!-- LEFT: audit input -->
+    <aside class="panel auditpanel" id="auditPanel" hidden>
+      <div class="panel-head"><span class="overline accent">What do you actually do?</span></div>
+
+      <div class="auditstep">
+        <span class="stepnum">1</span>
+        <div class="stepbody">
+          <b>Start from a shape</b>
+          <p>Pick whichever is closest. You can correct it next.</p>
+          <div class="splitpick" id="splitPick"></div>
+        </div>
+      </div>
+
+      <div class="auditstep" id="step2" hidden>
+        <span class="stepnum">2</span>
+        <div class="stepbody">
+          <b>Make it yours</b>
+          <p>Edit each day. Type exercises separated by commas, with sets after a name if you want, like <em>bench 4</em>.</p>
+          <div class="dayedit" id="dayEdit"></div>
+          <button class="ghostbtn" id="addDay">Add a day</button>
+        </div>
+      </div>
+
+      <div class="planfoot">
+        <button class="primarybtn" id="auditGo">Show me the gaps</button>
+      </div>
+    </aside>
+
     <!-- LEFT: planner -->
     <aside class="panel planner" id="plannerPanel" hidden>
       <div class="panel-head">
@@ -182,6 +211,19 @@
       </div>
       <p class="tapthint" id="tapHint">Tap a muscle to see what trains it</p>
     </section>
+
+    <!-- RIGHT: audit report -->
+    <aside class="panel detail" id="reportPanel" hidden>
+      <div class="week-head">
+        <span class="overline accent">What this week misses</span>
+        <h2 id="reportTitle">Your routine</h2>
+        <p class="weeknote" id="reportNote"></p>
+      </div>
+      <div id="reportBody"></div>
+      <p class="disclaimer">Volume is counted as working sets, with a muscle assisting an exercise
+        counted as half a set. Around 10 to 20 sets a week drives growth for a trained muscle and
+        roughly 4 to 6 maintains one. Nothing here accounts for injury history.</p>
+    </aside>
 
     <!-- RIGHT: generated week -->
     <aside class="panel detail" id="weekPanel" hidden>
